@@ -36,18 +36,16 @@ export default function Movimentacoes() {
   const loadMovimentacoes = async () => {
     try {
       const response = await api.get('/movimentacoes/')
-      console.log('Movimentacoes response:', response.data) // Debug log
       if (response.data && typeof response.data === 'object') {
         // If response.data is an object with results property (DRF pagination)
         const movimentacoes = Array.isArray(response.data.results) ? response.data.results : 
                             Array.isArray(response.data) ? response.data : []
-        console.log('Processed movimentacoes:', movimentacoes) // Debug log
         setMovimentacoes(movimentacoes)
       } else {
         setMovimentacoes([])
       }
     } catch (error) {
-      console.error('Error loading movimentacoes:', error) // Debug log
+      console.error('Error loading movimentacoes:', error)
       setError('Erro ao carregar movimentações')
     } finally {
       setIsLoading(false)
@@ -57,25 +55,19 @@ export default function Movimentacoes() {
   const loadAtivos = async () => {
     try {
       const response = await api.get('/ativos/')
-      console.log('Ativos response:', response.data) // Debug log
       if (response.data && typeof response.data === 'object') {
         // If response.data is an object with results property (DRF pagination)
         const ativos = Array.isArray(response.data.results) ? response.data.results : 
                       Array.isArray(response.data) ? response.data : []
-        console.log('Processed ativos:', ativos) // Debug log
         setAtivos(ativos)
       } else {
         setAtivos([])
       }
     } catch (error) {
-      console.error('Error loading ativos:', error) // Debug log
+      console.error('Error loading ativos:', error)
       setError('Erro ao carregar ativos')
     }
   }
-
-  useEffect(() => {
-    console.log('Current ativos state:', ativos) // Debug log
-  }, [ativos])
 
   const handleEdit = (movimentacao: Movimentacao) => {
     setEditingMovimentacao(movimentacao)
@@ -133,8 +125,8 @@ export default function Movimentacoes() {
     <div className="bg-gray-50 min-h-screen -mt-8 -mx-4 px-4 py-8 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
-          <h1 className="text-base font-semibold leading-6 text-gray-900">Movimentações</h1>
-          <p className="mt-2 text-sm text-gray-700">
+          <h1 className="text-2xl font-semibold text-gray-800">Movimentações</h1>
+          <p className="mt-2 text-sm text-gray-600">
             Lista de todas as movimentações dos seus ativos
           </p>
         </div>
@@ -153,7 +145,7 @@ export default function Movimentacoes() {
               })
               setShowForm(true)
             }}
-            className="block rounded-md bg-primary-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-primary-500"
+            className="rounded-md bg-primary-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
           >
             Adicionar Movimentação
           </button>
@@ -161,7 +153,7 @@ export default function Movimentacoes() {
       </div>
 
       {showForm && (
-        <div className="mt-8">
+        <div className="mt-8 bg-white shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
@@ -172,7 +164,7 @@ export default function Movimentacoes() {
                   id="ativo"
                   value={formData.ativo || ''}
                   onChange={(e) => setFormData({ ...formData, ativo: Number(e.target.value) })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                   required
                 >
                   <option value="">Selecione um ativo</option>
@@ -196,7 +188,7 @@ export default function Movimentacoes() {
                   id="operacao"
                   value={formData.operacao}
                   onChange={(e) => setFormData({ ...formData, operacao: e.target.value as Operacao })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                   required
                 >
                   {OPERACAO_OPTIONS.map((option) => (
@@ -216,7 +208,7 @@ export default function Movimentacoes() {
                   id="data"
                   value={formData.data}
                   onChange={(e) => setFormData({ ...formData, data: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                   required
                 />
               </div>
@@ -228,11 +220,10 @@ export default function Movimentacoes() {
                 <input
                   type="number"
                   id="quantidade"
-                  value={formData.quantidade}
-                  onChange={(e) => setFormData({ ...formData, quantidade: Number(e.target.value) })}
                   step="0.000001"
-                  min="0"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  value={formData.quantidade || ''}
+                  onChange={(e) => setFormData({ ...formData, quantidade: Number(e.target.value) })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                   required
                 />
               </div>
@@ -244,11 +235,10 @@ export default function Movimentacoes() {
                 <input
                   type="number"
                   id="valorUnitario"
-                  value={formData.valorUnitario}
-                  onChange={(e) => setFormData({ ...formData, valorUnitario: Number(e.target.value) })}
                   step="0.01"
-                  min="0"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  value={formData.valorUnitario || ''}
+                  onChange={(e) => setFormData({ ...formData, valorUnitario: Number(e.target.value) })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                   required
                 />
               </div>
@@ -260,11 +250,10 @@ export default function Movimentacoes() {
                 <input
                   type="number"
                   id="taxa"
-                  value={formData.taxa}
-                  onChange={(e) => setFormData({ ...formData, taxa: Number(e.target.value) })}
                   step="0.01"
-                  min="0"
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  value={formData.taxa || ''}
+                  onChange={(e) => setFormData({ ...formData, taxa: Number(e.target.value) })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                   required
                 />
               </div>
@@ -274,15 +263,15 @@ export default function Movimentacoes() {
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm hover:bg-gray-50"
+                className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="rounded-md bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-500"
+                className="rounded-md bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
               >
-                Salvar
+                {editingMovimentacao ? 'Salvar' : 'Adicionar'}
               </button>
             </div>
           </form>
@@ -292,85 +281,87 @@ export default function Movimentacoes() {
       <div className="mt-8 flow-root">
         <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
           <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-            <table className="min-w-full divide-y divide-gray-300">
-              <thead>
-                <tr>
-                  <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-0">
-                    Ativo
-                  </th>
-                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                    Data
-                  </th>
-                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                    Operação
-                  </th>
-                  <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
-                    Quantidade
-                  </th>
-                  <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
-                    Valor Unitário
-                  </th>
-                  <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
-                    Taxa
-                  </th>
-                  <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
-                    Custo Total
-                  </th>
-                  <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-0">
-                    <span className="sr-only">Ações</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {Array.isArray(movimentacoes) && movimentacoes.length > 0 ? (
-                  movimentacoes.map((movimentacao) => (
-                    <tr key={movimentacao.id}>
-                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-0">
-                        {movimentacao.ativo_display}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {format(new Date(movimentacao.data), 'dd/MM/yyyy')}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {movimentacao.operacao_display}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
-                        {movimentacao.quantidade.toLocaleString('pt-BR', { minimumFractionDigits: 6 })}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
-                        {movimentacao.valorUnitario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
-                        {movimentacao.taxa.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
-                        {movimentacao.custoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                      </td>
-                      <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
-                        <button
-                          onClick={() => handleEdit(movimentacao)}
-                          className="text-primary-600 hover:text-primary-900 mr-4"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => handleDelete(movimentacao.id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          Excluir
-                        </button>
+            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
+              <table className="min-w-full divide-y divide-gray-300">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">
+                      Ativo
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                      Data
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                      Operação
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
+                      Quantidade
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
+                      Valor Unitário
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
+                      Taxa
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
+                      Custo Total
+                    </th>
+                    <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                      <span className="sr-only">Ações</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {Array.isArray(movimentacoes) && movimentacoes.length > 0 ? (
+                    movimentacoes.map((movimentacao) => (
+                      <tr key={movimentacao.id}>
+                        <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-primary-600 sm:pl-6">
+                          {movimentacao.ativo_display}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                          {format(new Date(movimentacao.data), 'dd/MM/yyyy')}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                          {movimentacao.operacao_display}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
+                          {movimentacao.quantidade.toLocaleString('pt-BR', { minimumFractionDigits: 6 })}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
+                          {movimentacao.valorUnitario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
+                          {movimentacao.taxa.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
+                          {movimentacao.custoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </td>
+                        <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                          <button
+                            onClick={() => handleEdit(movimentacao)}
+                            className="text-primary-600 hover:text-primary-900 bg-transparent mr-4"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            onClick={() => handleDelete(movimentacao.id)}
+                            className="text-red-600 hover:text-red-900 bg-transparent"
+                          >
+                            Excluir
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={8} className="py-4 text-center text-sm text-gray-500">
+                        Nenhuma movimentação encontrada
                       </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={7} className="py-4 text-center text-sm text-gray-500">
-                      Nenhuma movimentação encontrada
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>

@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 
 # Create your models here.
 
@@ -123,3 +124,23 @@ class Dividendo(models.Model):
         ordering = ['-data', '-dataCriacao']
         verbose_name = 'Dividendo'
         verbose_name_plural = 'Dividendos'
+
+class EvolucaoPatrimonial(models.Model):
+    ativo = models.ForeignKey('Ativo', on_delete=models.CASCADE)
+    data = models.DateField()
+    preco_atual = models.DecimalField(max_digits=10, decimal_places=2)
+    quantidade = models.DecimalField(max_digits=10, decimal_places=6)
+    valor_total = models.DecimalField(max_digits=10, decimal_places=2)
+    custo_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    
+    class Meta:
+        ordering = ['-data', 'ativo__ticker']
+        unique_together = ['ativo', 'data']
+        
+    def __str__(self):
+        return f"{self.ativo.ticker} - {self.data.strftime('%m/%Y')}"
+
+    def save(self, *args, **kwargs):
+        # Always calculate valor_total based on current price and quantity
+        self.valor_total = self.preco_atual * self.quantidade
+        super().save(*args, **kwargs)

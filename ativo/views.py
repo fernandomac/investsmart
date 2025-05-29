@@ -1,8 +1,12 @@
 from django.shortcuts import render
-from rest_framework import viewsets
+from rest_framework import viewsets, status
 from rest_framework.filters import SearchFilter, OrderingFilter
-from .models import Categoria, Ativo, Movimentacao, Dividendo
-from .serializers import CategoriaSerializer, AtivoSerializer, MovimentacaoSerializer, DividendoSerializer
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from .models import Categoria, Ativo, Movimentacao, Dividendo, EvolucaoPatrimonial
+from .serializers import CategoriaSerializer, AtivoSerializer, MovimentacaoSerializer, DividendoSerializer, EvolucaoPatrimonialSerializer
+from .services import create_snapshot, create_snapshots_for_all_assets
+from datetime import date
 
 # Create your views here.
 
@@ -50,3 +54,31 @@ class DividendoViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return Dividendo.objects.filter(ativo__usuario=self.request.user)
+
+class EvolucaoPatrimonialViewSet(viewsets.ModelViewSet):
+    queryset = EvolucaoPatrimonial.objects.all()
+    serializer_class = EvolucaoPatrimonialSerializer
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ['ativo__ticker']
+    ordering_fields = ['data', 'valor_total']
+    ordering = ['-data']
+    pagination_class = None
+    
+    def get_queryset(self):
+        return EvolucaoPatrimonial.objects.filter(ativo__usuario=self.request.user)
+    
+    @action(detail=False, methods=['post'])
+    def create_snapshots(self, request):
+        """Create snapshots for all assets."""
+        try:
+            snapshot_date = date.today()
+            if 'data' in request.data:
+                snapshot_date = date.fromisoformat(request.data['data'])
+            
+            create_snapshots_for_all_assets(snapshot_date, request.user)
+            return Response({'status': 'Snapshots created successfully'})
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -28,14 +28,9 @@ export default function Dividendos() {
         api.get('/ativos/')
       ])
       
-      console.log('Raw ativos response:', ativosResponse)
-      console.log('Raw ativos data:', ativosResponse.data)
-      
       // Ensure we have arrays, even if empty
       const dividendosData = Array.isArray(dividendosResponse.data) ? dividendosResponse.data : []
       const ativosData = Array.isArray(ativosResponse.data) ? ativosResponse.data : (ativosResponse.data?.results || [])
-      
-      console.log('Processed ativos data:', ativosData)
       
       setDividendos(dividendosData)
       setAtivos(ativosData)
@@ -120,80 +115,84 @@ export default function Dividendos() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="sm:flex sm:items-center">
-          <div className="sm:flex-auto">
-            <h1 className="text-2xl font-semibold text-gray-800">Dividendos</h1>
-            <p className="mt-2 text-sm text-gray-600">
-              Gerencie os dividendos recebidos dos seus ativos.
-            </p>
-          </div>
-          <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-            <button
-              type="button"
-              onClick={() => {
-                setEditingDividendo(null)
-                setFormData({
-                  ativo: '',
-                  data: format(new Date(), 'yyyy-MM-dd'),
-                  valor: ''
-                })
-                setIsModalOpen(true)
-              }}
-              className="inline-flex items-center justify-center rounded-md border border-transparent bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 sm:w-auto"
-            >
-              Adicionar Dividendo
-            </button>
-          </div>
+    <div className="bg-gray-50 min-h-screen -mt-8 -mx-4 px-4 py-8 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+      <div className="sm:flex sm:items-center">
+        <div className="sm:flex-auto">
+          <h1 className="text-2xl font-semibold text-gray-800">Dividendos</h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Gerencie os dividendos recebidos dos seus ativos.
+          </p>
         </div>
+        <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
+          <button
+            type="button"
+            onClick={() => {
+              setEditingDividendo(null)
+              setFormData({
+                ativo: '',
+                data: format(new Date(), 'yyyy-MM-dd'),
+                valor: ''
+              })
+              setIsModalOpen(true)
+            }}
+            className="rounded-md bg-primary-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+          >
+            Adicionar Dividendo
+          </button>
+        </div>
+      </div>
 
-        <div className="mt-8 flex flex-col">
-          <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
-            <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-              <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                <table className="min-w-full divide-y divide-gray-300">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">Ativo</th>
-                      <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Data</th>
-                      <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Valor</th>
-                      <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                        <span className="sr-only">Ações</span>
-                      </th>
+      <div className="mt-8 flow-root">
+        <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+          <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
+              <table className="min-w-full divide-y divide-gray-300">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">
+                      Ativo
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                      Data
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
+                      Valor
+                    </th>
+                    <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                      <span className="sr-only">Ações</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 bg-white">
+                  {dividendos.map((dividendo) => (
+                    <tr key={dividendo.id}>
+                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-primary-600 sm:pl-6">
+                        {dividendo.ativo_display}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        {format(new Date(dividendo.data), 'dd/MM/yyyy')}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
+                        {dividendo.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </td>
+                      <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                        <button
+                          onClick={() => handleEdit(dividendo)}
+                          className="text-primary-600 hover:text-primary-900 bg-transparent mr-4"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => dividendo.id && handleDelete(dividendo.id)}
+                          className="text-red-600 hover:text-red-900 bg-transparent"
+                        >
+                          Excluir
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 bg-white">
-                    {dividendos.map((dividendo) => (
-                      <tr key={dividendo.id}>
-                        <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-primary-600 sm:pl-6">
-                          {dividendo.ativo_display}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                          {format(new Date(dividendo.data), 'dd/MM/yyyy')}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
-                          {dividendo.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </td>
-                        <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                          <button
-                            onClick={() => handleEdit(dividendo)}
-                            className="text-primary-600 hover:text-primary-900 mr-4"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            onClick={() => dividendo.id && handleDelete(dividendo.id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            Excluir
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -208,7 +207,7 @@ export default function Dividendos() {
               <form onSubmit={handleSubmit}>
                 <div>
                   <div className="mt-3 text-center sm:mt-0 sm:text-left">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900">
+                    <h3 className="text-lg font-medium text-gray-900">
                       {editingDividendo ? 'Editar Dividendo' : 'Novo Dividendo'}
                     </h3>
                   </div>
@@ -224,11 +223,8 @@ export default function Dividendos() {
                         id="ativo"
                         name="ativo"
                         value={formData.ativo}
-                        onChange={(e) => {
-                          console.log('Selected ativo:', e.target.value) // Debug log
-                          setFormData({ ...formData, ativo: e.target.value })
-                        }}
-                        className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                        onChange={(e) => setFormData({ ...formData, ativo: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                         required
                       >
                         <option value="">Selecione um ativo</option>
@@ -252,7 +248,7 @@ export default function Dividendos() {
                         id="data"
                         value={formData.data}
                         onChange={(e) => setFormData({ ...formData, data: e.target.value })}
-                        className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                         required
                       />
                     </div>
@@ -268,10 +264,9 @@ export default function Dividendos() {
                         name="valor"
                         id="valor"
                         step="0.01"
-                        min="0"
                         value={formData.valor}
                         onChange={(e) => setFormData({ ...formData, valor: e.target.value })}
-                        className="shadow-sm focus:ring-primary-500 focus:border-primary-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
                         required
                       />
                     </div>
@@ -281,9 +276,9 @@ export default function Dividendos() {
                 <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3 sm:grid-flow-row-dense">
                   <button
                     type="submit"
-                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-primary-600 text-base font-medium text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:col-start-2 sm:text-sm"
+                    className="w-full inline-flex justify-center rounded-md bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 sm:col-start-2"
                   >
-                    {editingDividendo ? 'Salvar' : 'Criar'}
+                    {editingDividendo ? 'Salvar' : 'Adicionar'}
                   </button>
                   <button
                     type="button"
@@ -296,7 +291,7 @@ export default function Dividendos() {
                         valor: ''
                       })
                     }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:col-start-1 sm:text-sm"
+                    className="mt-3 w-full inline-flex justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600 sm:mt-0 sm:col-start-1"
                   >
                     Cancelar
                   </button>

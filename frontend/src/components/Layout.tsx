@@ -17,6 +17,7 @@ const navigation = [
   { name: 'Ativos', href: '/ativos', icon: BanknotesIcon },
   { name: 'Movimentações', href: '/movimentacoes', icon: ArrowsRightLeftIcon },
   { name: 'Dividendos', href: '/dividendos', icon: CurrencyDollarIcon },
+  { name: 'Evolução Patrimonial', href: '/evolucao-patrimonial', icon: ChartBarIcon },
 ]
 
 export default function Layout() {
