@@ -1,8 +1,8 @@
 from django.shortcuts import render
 from rest_framework import viewsets
 from rest_framework.filters import SearchFilter, OrderingFilter
-from .models import Categoria, Ativo, Movimentacao
-from .serializers import CategoriaSerializer, AtivoSerializer, MovimentacaoSerializer
+from .models import Categoria, Ativo, Movimentacao, Dividendo
+from .serializers import CategoriaSerializer, AtivoSerializer, MovimentacaoSerializer, DividendoSerializer
 
 # Create your views here.
 
@@ -39,3 +39,14 @@ class MovimentacaoViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return Movimentacao.objects.filter(ativo__usuario=self.request.user)
+
+class DividendoViewSet(viewsets.ModelViewSet):
+    serializer_class = DividendoSerializer
+    filter_backends = [SearchFilter, OrderingFilter]
+    search_fields = ['ativo__ticker']
+    ordering_fields = ['data', 'valor', 'dataCriacao']
+    ordering = ['-data', '-dataCriacao']
+    pagination_class = None
+
+    def get_queryset(self):
+        return Dividendo.objects.filter(ativo__usuario=self.request.user)

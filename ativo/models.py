@@ -108,3 +108,18 @@ class Movimentacao(models.Model):
 
     class Meta:
         ordering = ['-data', '-dataCriacao']
+
+class Dividendo(models.Model):
+    ativo = models.ForeignKey(Ativo, on_delete=models.PROTECT)
+    data = models.DateField()
+    valor = models.DecimalField(max_digits=15, decimal_places=2)
+    dataCriacao = models.DateTimeField(auto_now_add=True)
+    dataAlteracao = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.ativo.ticker} - {self.data} - {self.valor}"
+
+    class Meta:
+        ordering = ['-data', '-dataCriacao']
+        verbose_name = 'Dividendo'
+        verbose_name_plural = 'Dividendos'

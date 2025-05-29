@@ -1,18 +1,34 @@
 import { useEffect, useState } from 'react'
 import type { Ativo } from '../types/ativo'
 import type { Movimentacao } from '../types/movimentacao'
+import type { Dividendo } from '../types/dividendo'
 import api from '../services/api'
 import {
   Chart as ChartJS,
   ArcElement,
   Tooltip,
   Legend,
-  Colors
+  Colors,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title
 } from 'chart.js'
-import { Pie } from 'react-chartjs-2'
+import { Pie, Bar } from 'react-chartjs-2'
+import { format, parse, startOfMonth } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 
 // Register ChartJS components
-ChartJS.register(ArcElement, Tooltip, Legend, Colors)
+ChartJS.register(
+  ArcElement,
+  Tooltip,
+  Legend,
+  Colors,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title
+)
 
 interface MovimentacaoSummary {
   ticker: string
@@ -34,15 +50,18 @@ interface CategoriaSummary {
 export default function Dashboard() {
   const [ativos, setAtivos] = useState<Ativo[]>([])
   const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([])
+  const [dividendos, setDividendos] = useState<Dividendo[]>([])
+  const [dividendosGroupBy, setDividendosGroupBy] = useState<'ativo' | 'categoria'>('ativo')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [ativosResponse, movimentacoesResponse] = await Promise.all([
+        const [ativosResponse, movimentacoesResponse, dividendosResponse] = await Promise.all([
           api.get('/ativos/'),
-          api.get('/movimentacoes/')
+          api.get('/movimentacoes/'),
+          api.get('/dividendos/')
         ])
         
         // Handle both paginated and non-paginated responses
@@ -52,8 +71,12 @@ export default function Dashboard() {
         const movimentacoes = Array.isArray(movimentacoesResponse.data) ? movimentacoesResponse.data :
                              Array.isArray(movimentacoesResponse.data.results) ? movimentacoesResponse.data.results : []
         
+        const dividendos = Array.isArray(dividendosResponse.data) ? dividendosResponse.data :
+                          Array.isArray(dividendosResponse.data.results) ? dividendosResponse.data.results : []
+        
         setAtivos(ativos)
         setMovimentacoes(movimentacoes)
+        setDividendos(dividendos)
       } catch (error) {
         console.error('Error fetching data:', error)
         setError('Erro ao carregar dados')
@@ -142,6 +165,102 @@ export default function Dashboard() {
         percentual: (valorTotal / totalPortfolio) * 100
       }))
       .sort((a, b) => b.valorTotal - a.valorTotal) // Sort by value, highest first
+  }
+
+  const calcularDividendosMensais = () => {
+    // Create a map to store monthly dividends
+    const dividendosPorMes: { [key: string]: { [key: string]: number } } = {}
+    
+    // Get last 12 months
+    const hoje = new Date()
+    const ultimos12Meses = Array.from({ length: 12 }, (_, i) => {
+      const data = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1)
+      return format(data, 'MMM yyyy', { locale: ptBR })
+    }).reverse()
+    
+    // Initialize all months with 0
+    ultimos12Meses.forEach(mes => {
+      dividendosPorMes[mes] = {}
+    })
+    
+    dividendos.forEach(dividendo => {
+      const data = startOfMonth(parse(dividendo.data, 'yyyy-MM-dd', new Date()))
+      const mesAno = format(data, 'MMM yyyy', { locale: ptBR })
+      
+      // Skip if not in last 12 months
+      if (!ultimos12Meses.includes(mesAno)) return
+      
+      const ativo = ativos.find(a => a.id === dividendo.ativo)
+      if (!ativo) return
+      
+      const chave = dividendosGroupBy === 'ativo' ? ativo.ticker : ativo.categoria_display || 'Sem categoria'
+      
+      if (!dividendosPorMes[mesAno][chave]) {
+        dividendosPorMes[mesAno][chave] = 0
+      }
+      
+      dividendosPorMes[mesAno][chave] += Number(dividendo.valor)
+    })
+    
+    // Get unique labels (ativos or categorias)
+    const labels = Array.from(new Set(
+      dividendos
+        .map(d => {
+          const ativo = ativos.find(a => a.id === d.ativo)
+          if (!ativo) return 'Desconhecido'
+          return dividendosGroupBy === 'ativo' ? ativo.ticker : (ativo.categoria_display || 'Sem categoria')
+        })
+    )).filter(label => label !== 'Desconhecido')
+    
+    // Calculate total for percentages
+    const totalPorMes = ultimos12Meses.map(mes => {
+      const valores = Object.values(dividendosPorMes[mes] || {})
+      return valores.reduce((acc, curr) => acc + curr, 0)
+    })
+    
+    // Add percentage to month labels
+    const mesesComPercentual = ultimos12Meses.map((mes, index) => {
+      const total = totalPorMes[index]
+      const percentual = (total / totalPorMes.reduce((acc, curr) => acc + curr, 0) * 100) || 0
+      return `${mes} (${percentual.toFixed(1)}%)`
+    })
+    
+    return {
+      labels: mesesComPercentual,
+      datasets: labels.map((label, index) => ({
+        label,
+        data: ultimos12Meses.map(mes => dividendosPorMes[mes][label] || 0),
+        backgroundColor: [
+          '#3B82F6', // blue-500
+          '#10B981', // emerald-500
+          '#F59E0B', // amber-500
+          '#EF4444', // red-500
+          '#8B5CF6', // violet-500
+          '#EC4899', // pink-500
+          '#14B8A6', // teal-500
+          '#F97316', // orange-500
+          '#6366F1', // indigo-500
+          '#84CC16', // lime-500
+          '#9333EA', // purple-500
+          '#06B6D4', // cyan-500
+        ][index % 12],
+        borderColor: [
+          '#2563EB', // blue-600
+          '#059669', // emerald-600
+          '#D97706', // amber-600
+          '#DC2626', // red-600
+          '#7C3AED', // violet-600
+          '#DB2777', // pink-600
+          '#0D9488', // teal-600
+          '#EA580C', // orange-600
+          '#4F46E5', // indigo-600
+          '#65A30D', // lime-600
+          '#7E22CE', // purple-600
+          '#0891B2', // cyan-600
+        ][index % 12],
+        borderWidth: 1
+      }))
+    } as const
   }
 
   if (loading) {
@@ -319,6 +438,54 @@ export default function Dashboard() {
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* New monthly dividends chart */}
+          <div className="bg-white shadow rounded-lg p-6 xl:col-span-2">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-medium text-gray-900">Dividendos Mensais</h2>
+              <select
+                value={dividendosGroupBy}
+                onChange={(e) => setDividendosGroupBy(e.target.value as 'ativo' | 'categoria')}
+                className="rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+              >
+                <option value="ativo">Agrupar por Ativo</option>
+                <option value="categoria">Agrupar por Categoria</option>
+              </select>
+            </div>
+            <div className="h-[400px]">
+              <Bar
+                data={calcularDividendosMensais()}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      position: 'right'
+                    },
+                    title: {
+                      display: false
+                    }
+                  },
+                  scales: {
+                    x: {
+                      stacked: true
+                    },
+                    y: {
+                      stacked: true,
+                      ticks: {
+                        callback: (value) => {
+                          return value.toLocaleString('pt-BR', {
+                            style: 'currency',
+                            currency: 'BRL'
+                          })
+                        }
+                      }
+                    }
+                  }
+                }}
+              />
             </div>
           </div>
 

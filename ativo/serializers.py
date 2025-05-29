@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Categoria, Ativo, Movimentacao
+from .models import Categoria, Ativo, Movimentacao, Dividendo
 
 class CategoriaSerializer(serializers.ModelSerializer):
     class Meta:
@@ -41,4 +41,23 @@ class MovimentacaoSerializer(serializers.ModelSerializer):
         """
         if value.usuario != self.context['request'].user:
             raise serializers.ValidationError("You can only create transactions for your own assets.")
+        return value
+
+class DividendoSerializer(serializers.ModelSerializer):
+    ativo_display = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Dividendo
+        fields = ['id', 'ativo', 'ativo_display', 'data', 'valor', 'dataCriacao', 'dataAlteracao']
+        read_only_fields = ['dataCriacao', 'dataAlteracao']
+
+    def get_ativo_display(self, obj):
+        return str(obj.ativo)
+
+    def validate_ativo(self, value):
+        """
+        Check if the ativo belongs to the current user
+        """
+        if value.usuario != self.context['request'].user:
+            raise serializers.ValidationError("You can only create dividends for your own assets.")
         return value
