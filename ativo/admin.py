@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Categoria, Ativo, Movimentacao, EvolucaoPatrimonial
+from .models import Categoria, Ativo, Movimentacao, EvolucaoPatrimonial, Dividendo
 
 @admin.register(Categoria)
 class CategoriaAdmin(admin.ModelAdmin):
@@ -17,11 +17,18 @@ class AtivoAdmin(admin.ModelAdmin):
 
 @admin.register(Movimentacao)
 class MovimentacaoAdmin(admin.ModelAdmin):
-    list_display = ['ativo', 'data', 'operacao', 'quantidade', 'valorUnitario', 'taxa', 'custoTotal']
+    list_display = ['ativo', 'data', 'operacao', 'quantidade', 'valorUnitario', 'taxa', 'custoTotal', 'dataCriacao', 'dataAlteracao']
     list_filter = ['operacao', 'data', 'ativo__usuario']
     search_fields = ['ativo__ticker', 'ativo__nome']
     ordering = ['-data', '-dataCriacao']
-    readonly_fields = ['custoTotal']
+    readonly_fields = ['custoTotal', 'dataCriacao', 'dataAlteracao']
+
+@admin.register(Dividendo)
+class DividendoAdmin(admin.ModelAdmin):
+    list_display = ['ativo', 'data', 'valor', 'dataCriacao', 'dataAlteracao']
+    list_filter = ['data', 'ativo__usuario', 'ativo__categoria']
+    search_fields = ['ativo__ticker', 'ativo__nome']
+    ordering = ['-data', '-dataCriacao']
 
 @admin.register(EvolucaoPatrimonial)
 class EvolucaoPatrimonialAdmin(admin.ModelAdmin):
