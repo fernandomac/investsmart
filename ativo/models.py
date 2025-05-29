@@ -78,3 +78,33 @@ class Ativo(models.Model):
 
     def __str__(self):
         return f"{self.ticker} - {self.nome}"
+
+class Movimentacao(models.Model):
+    OPERACAO_CHOICES = [
+        ('COMPRA', 'Compra'),
+        ('VENDA', 'Venda'),
+        ('BONIFICACAO', 'Bonificação'),
+        ('GRUPAMENTO', 'Grupamento'),
+        ('DESDOBRAMENTO', 'Desdobramento'),
+    ]
+
+    ativo = models.ForeignKey(Ativo, on_delete=models.PROTECT)
+    data = models.DateField()
+    operacao = models.CharField(max_length=20, choices=OPERACAO_CHOICES)
+    quantidade = models.DecimalField(max_digits=15, decimal_places=6)
+    valorUnitario = models.DecimalField(max_digits=15, decimal_places=2)
+    taxa = models.DecimalField(max_digits=15, decimal_places=2)
+    custoTotal = models.DecimalField(max_digits=15, decimal_places=2)
+    dataCriacao = models.DateTimeField(auto_now_add=True)
+    dataAlteracao = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        # Calculate custoTotal before saving
+        self.custoTotal = (self.quantidade * self.valorUnitario) + self.taxa
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.ativo.ticker} - {self.get_operacao_display()} - {self.data}"
+
+    class Meta:
+        ordering = ['-data', '-dataCriacao']

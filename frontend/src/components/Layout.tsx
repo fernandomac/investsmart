@@ -6,6 +6,7 @@ import {
   HomeIcon,
   BanknotesIcon,
   ChartBarIcon,
+  ArrowsRightLeftIcon,
 } from '@heroicons/react/24/outline'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
@@ -13,6 +14,7 @@ import clsx from 'clsx'
 const navigation = [
   { name: 'Dashboard', href: '/', icon: HomeIcon },
   { name: 'Ativos', href: '/ativos', icon: BanknotesIcon },
+  { name: 'Movimentações', href: '/movimentacoes', icon: ArrowsRightLeftIcon },
 ]
 
 export default function Layout() {

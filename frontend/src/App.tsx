@@ -1,13 +1,14 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import Ativos from './pages/Ativos'
+import Movimentacoes from './pages/Movimentacoes'
 import Login from './pages/Login'
 import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
   return (
-    <Router>
+    <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route
@@ -20,9 +21,11 @@ function App() {
         >
           <Route index element={<Dashboard />} />
           <Route path="ativos" element={<Ativos />} />
+          <Route path="movimentacoes" element={<Movimentacoes />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
-    </Router>
+    </BrowserRouter>
   )
 }
 
