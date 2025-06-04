@@ -7,6 +7,9 @@ export interface Ativo {
   moeda: Moeda
   categoria: number
   categoria_display: string
+  peso: number
+  dataVencimento: string | null
+  anotacao: string
   dataCriacao: string
   dataAlteracao: string
 } 

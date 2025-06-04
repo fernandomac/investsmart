@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { Ativo, Categoria, TipoCategoria, SubtipoCategoria } from '../services/api'
 import { ativoService, categoriaService } from '../services/api'
+import { format } from 'date-fns'
 
 function Ativos() {
   const [ativos, setAtivos] = useState<Ativo[]>([])
@@ -13,6 +14,9 @@ function Ativos() {
     nome: '',
     moeda: '',
     categoria: '',
+    peso: '0',
+    dataVencimento: '',
+    anotacao: '',
   })
 
   const MOEDA_OPTIONS = [
@@ -79,7 +83,10 @@ function Ativos() {
       ticker: ativo.ticker,
       nome: ativo.nome,
       moeda: ativo.moeda,
-      categoria: ativo.categoria.toString(),
+      categoria: String(ativo.categoria),
+      peso: String(ativo.peso || 0),
+      dataVencimento: ativo.dataVencimento || '',
+      anotacao: ativo.anotacao || '',
     })
     setShowForm(true)
   }
@@ -98,7 +105,10 @@ function Ativos() {
         ticker: formData.ticker.toUpperCase(), // Ensure ticker is uppercase
         nome: formData.nome,
         moeda: formData.moeda,
-        categoria: parseInt(formData.categoria)
+        categoria: parseInt(formData.categoria),
+        peso: parseFloat(formData.peso),
+        dataVencimento: formData.dataVencimento || null,
+        anotacao: formData.anotacao,
       }
 
       if (editingAtivo) {
@@ -109,7 +119,7 @@ function Ativos() {
       
       await fetchData() // Refresh data after creating/updating asset
       setShowForm(false)
-      setFormData({ ticker: '', nome: '', moeda: '', categoria: '' })
+      setFormData({ ticker: '', nome: '', moeda: '', categoria: '', peso: '0', dataVencimento: '', anotacao: '' })
       setEditingAtivo(null)
     } catch (error: any) {
       console.error('Erro ao salvar ativo:', error)
@@ -123,6 +133,16 @@ function Ativos() {
         alert('Erro ao salvar ativo. Por favor, tente novamente.')
       }
     }
+  }
+
+  // Calculate total peso
+  const totalPeso = ativos.reduce((sum, ativo) => sum + Number(ativo.peso || 0), 0)
+  
+  // Determine status color
+  const getPesoStatusColor = (total: number) => {
+    if (total === 100) return 'text-green-600'
+    if (total < 100) return 'text-yellow-600'
+    return 'text-red-600'
   }
 
   if (loading) {
@@ -152,7 +172,19 @@ function Ativos() {
           </button>
           <button
             type="button"
-            onClick={() => setShowForm(true)}
+            onClick={() => {
+              setEditingAtivo(null)
+              setFormData({
+                ticker: '',
+                nome: '',
+                moeda: 'BRL',
+                categoria: '',
+                peso: '0',
+                dataVencimento: '',
+                anotacao: '',
+              })
+              setShowForm(true)
+            }}
             className="rounded-md bg-primary-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
           >
             Adicionar Ativo
@@ -161,107 +193,148 @@ function Ativos() {
       </div>
 
       {showForm && (
-        <div className="mt-8">
-          <form onSubmit={handleSubmit} className="space-y-4 bg-white p-6 rounded-lg shadow">
-            <div>
-              <label htmlFor="ticker" className="block text-sm font-medium text-gray-700">
-                Ticker
-              </label>
-              <input
-                type="text"
-                id="ticker"
-                name="ticker"
-                value={formData.ticker}
-                onChange={(e) => setFormData({ ...formData, ticker: e.target.value })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                required
-                disabled={editingAtivo !== null}
-              />
-            </div>
+        <div className="fixed inset-0 z-10 overflow-y-auto">
+          <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+            <div className="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="ticker" className="block text-sm font-medium text-gray-700">
+                    Ticker
+                  </label>
+                  <input
+                    type="text"
+                    name="ticker"
+                    id="ticker"
+                    value={formData.ticker}
+                    onChange={(e) => setFormData({ ...formData, ticker: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    required
+                  />
+                </div>
 
-            <div>
-              <label htmlFor="nome" className="block text-sm font-medium text-gray-700">
-                Nome
-              </label>
-              <input
-                type="text"
-                id="nome"
-                name="nome"
-                value={formData.nome}
-                onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                required
-              />
-            </div>
+                <div>
+                  <label htmlFor="nome" className="block text-sm font-medium text-gray-700">
+                    Nome
+                  </label>
+                  <input
+                    type="text"
+                    name="nome"
+                    id="nome"
+                    value={formData.nome}
+                    onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    required
+                  />
+                </div>
 
-            <div>
-              <label htmlFor="categoria" className="block text-sm font-medium text-gray-700">
-                Categoria
-              </label>
-              <select
-                id="categoria"
-                name="categoria"
-                value={formData.categoria}
-                onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                required
-              >
-                <option value="">Selecione uma categoria</option>
-                {Object.keys(TIPO_DISPLAY).map((tipo) => (
-                  <optgroup key={tipo} label={TIPO_DISPLAY[tipo as TipoCategoria]}>
-                    {categorias
-                      .filter(cat => cat.tipo === tipo)
-                      .map((categoria) => (
-                        <option key={categoria.id} value={categoria.id}>
-                          {categoria.descricao}
-                        </option>
-                      ))}
-                  </optgroup>
-                ))}
-              </select>
-            </div>
+                <div>
+                  <label htmlFor="moeda" className="block text-sm font-medium text-gray-700">
+                    Moeda
+                  </label>
+                  <select
+                    name="moeda"
+                    id="moeda"
+                    value={formData.moeda}
+                    onChange={(e) => setFormData({ ...formData, moeda: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    required
+                  >
+                    <option value="">Selecione uma moeda</option>
+                    {MOEDA_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            <div>
-              <label htmlFor="moeda" className="block text-sm font-medium text-gray-700">
-                Moeda
-              </label>
-              <select
-                id="moeda"
-                name="moeda"
-                value={formData.moeda}
-                onChange={(e) => setFormData({ ...formData, moeda: e.target.value })}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                required
-              >
-                <option value="">Selecione uma moeda</option>
-                {MOEDA_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <div>
+                  <label htmlFor="categoria" className="block text-sm font-medium text-gray-700">
+                    Categoria
+                  </label>
+                  <select
+                    name="categoria"
+                    id="categoria"
+                    value={formData.categoria}
+                    onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    required
+                  >
+                    <option value="">Selecione uma categoria</option>
+                    {categorias.map(categoria => (
+                      <option key={categoria.id} value={categoria.id}>
+                        {categoria.tipo} - {categoria.subtipo}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            <div className="flex justify-end space-x-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowForm(false)
-                  setEditingAtivo(null)
-                  setFormData({ ticker: '', nome: '', moeda: '', categoria: '' })
-                }}
-                className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-              >
-                {editingAtivo ? 'Atualizar' : 'Salvar'}
-              </button>
+                <div>
+                  <label htmlFor="peso" className="block text-sm font-medium text-gray-700">
+                    Peso (%)
+                  </label>
+                  <input
+                    type="number"
+                    name="peso"
+                    id="peso"
+                    value={formData.peso}
+                    onChange={(e) => setFormData({ ...formData, peso: e.target.value })}
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                  <p className="mt-1 text-sm text-gray-500">Porcentagem desejada do total (0-100)</p>
+                </div>
+
+                <div>
+                  <label htmlFor="dataVencimento" className="block text-sm font-medium text-gray-700">
+                    Data de Vencimento
+                  </label>
+                  <input
+                    type="date"
+                    name="dataVencimento"
+                    id="dataVencimento"
+                    value={formData.dataVencimento}
+                    onChange={(e) => setFormData({ ...formData, dataVencimento: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                  <p className="mt-1 text-sm text-gray-500">Data de vencimento para investimentos de renda fixa</p>
+                </div>
+
+                <div>
+                  <label htmlFor="anotacao" className="block text-sm font-medium text-gray-700">
+                    Anotações
+                  </label>
+                  <textarea
+                    name="anotacao"
+                    id="anotacao"
+                    value={formData.anotacao}
+                    onChange={(e) => setFormData({ ...formData, anotacao: e.target.value })}
+                    rows={3}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  />
+                  <p className="mt-1 text-sm text-gray-500">Anotações gerais sobre o ativo</p>
+                </div>
+
+                <div className="mt-5 sm:mt-6 sm:grid sm:grid-flow-row-dense sm:grid-cols-2 sm:gap-3">
+                  <button
+                    type="submit"
+                    className="inline-flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:col-start-2"
+                  >
+                    {editingAtivo ? 'Salvar' : 'Adicionar'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowForm(false)}
+                    className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:col-start-1 sm:mt-0"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
             </div>
-          </form>
+          </div>
         </div>
       )}
 
@@ -284,6 +357,12 @@ function Ativos() {
                     <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
                       Moeda
                     </th>
+                    <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
+                      Peso (%)
+                    </th>
+                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                      Vencimento
+                    </th>
                     <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
                       <span className="sr-only">Ações</span>
                     </th>
@@ -291,30 +370,59 @@ function Ativos() {
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {ativos.length > 0 ? (
-                    ativos.map((ativo) => (
-                      <tr key={ativo.id}>
-                        <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-primary-600 sm:pl-6">
-                          {ativo.ticker}
+                    <>
+                      {ativos.map((ativo) => (
+                        <tr key={ativo.id}>
+                          <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-primary-600 sm:pl-6">
+                            {ativo.ticker}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                            {ativo.nome}
+                            {ativo.anotacao && (
+                              <p className="text-xs text-gray-400 mt-1">{ativo.anotacao}</p>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                            {ativo.categoria_display || '-'}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{ativo.moeda}</td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
+                            {Number(ativo.peso || 0).toFixed(2)}%
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                            {ativo.dataVencimento ? format(new Date(ativo.dataVencimento), 'dd/MM/yyyy') : '-'}
+                          </td>
+                          <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                            <button
+                              type="button"
+                              onClick={() => handleEdit(ativo)}
+                              className="text-primary-600 hover:text-primary-900"
+                            >
+                              Editar
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="bg-gray-50">
+                        <td colSpan={4} className="py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
+                          Total
                         </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{ativo.nome}</td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                          {(ativo as any).categoria_display || '-'}
+                        <td className={`whitespace-nowrap px-3 py-4 text-sm text-right font-medium ${getPesoStatusColor(totalPeso)}`}>
+                          {totalPeso.toFixed(2)}%
+                          {totalPeso !== 100 && (
+                            <p className="text-xs mt-1">
+                              {totalPeso < 100 
+                                ? `Faltam ${(100 - totalPeso).toFixed(2)}%`
+                                : `Excesso de ${(totalPeso - 100).toFixed(2)}%`}
+                            </p>
+                          )}
                         </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{ativo.moeda}</td>
-                        <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                          <button
-                            type="button"
-                            onClick={() => handleEdit(ativo)}
-                            className="text-primary-600 hover:text-primary-900"
-                          >
-                            Editar
-                          </button>
-                        </td>
+                        <td colSpan={2}></td>
                       </tr>
-                    ))
+                    </>
                   ) : (
                     <tr>
-                      <td colSpan={5} className="text-center py-4 text-sm text-gray-500">
+                      <td colSpan={7} className="text-center py-4 text-sm text-gray-500">
                         Nenhum ativo encontrado
                       </td>
                     </tr>

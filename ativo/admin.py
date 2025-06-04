@@ -10,9 +10,9 @@ class CategoriaAdmin(admin.ModelAdmin):
 
 @admin.register(Ativo)
 class AtivoAdmin(admin.ModelAdmin):
-    list_display = ['ticker', 'nome', 'moeda', 'categoria', 'usuario', 'dataCriacao', 'dataAlteracao']
-    list_filter = ['moeda', 'categoria', 'usuario']
-    search_fields = ['ticker', 'nome']
+    list_display = ['ticker', 'nome', 'moeda', 'categoria', 'peso', 'dataVencimento', 'usuario', 'dataCriacao', 'dataAlteracao']
+    list_filter = ['moeda', 'categoria', 'usuario', 'dataVencimento']
+    search_fields = ['ticker', 'nome', 'anotacao']
     ordering = ['ticker']
 
 @admin.register(Movimentacao)

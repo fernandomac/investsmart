@@ -69,6 +69,9 @@ class Ativo(models.Model):
     moeda = models.CharField(max_length=3, choices=MOEDA_CHOICES, default='BRL')
     categoria = models.ForeignKey(Categoria, on_delete=models.PROTECT)
     usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='ativos')
+    peso = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text='Porcentagem desejada do total (0-100)')
+    dataVencimento = models.DateField(null=True, blank=True, help_text='Data de vencimento para investimentos de renda fixa')
+    anotacao = models.TextField(blank=True, help_text='Anotações gerais sobre o ativo')
     dataCriacao = models.DateTimeField(auto_now_add=True)
     dataAlteracao = models.DateTimeField(auto_now=True)
 

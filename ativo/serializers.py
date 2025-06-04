@@ -13,11 +13,20 @@ class AtivoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Ativo
-        fields = ['id', 'ticker', 'nome', 'moeda', 'categoria', 'categoria_display', 'usuario', 'dataCriacao', 'dataAlteracao']
+        fields = ['id', 'ticker', 'nome', 'moeda', 'categoria', 'categoria_display', 'usuario', 
+                 'peso', 'dataVencimento', 'anotacao', 'dataCriacao', 'dataAlteracao']
         read_only_fields = ['dataCriacao', 'dataAlteracao']
 
     def get_categoria_display(self, obj):
         return str(obj.categoria)
+
+    def validate_peso(self, value):
+        """
+        Validate that peso is between 0 and 100
+        """
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("O peso deve estar entre 0 e 100.")
+        return value
 
 class MovimentacaoSerializer(serializers.ModelSerializer):
     ativo_display = serializers.SerializerMethodField()

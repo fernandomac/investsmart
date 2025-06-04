@@ -504,28 +504,60 @@ export default function Dashboard() {
                           <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Quantidade</th>
                           <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Custo Médio</th>
                           <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Valor Total</th>
+                          <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Peso Desejado</th>
+                          <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Peso Atual</th>
+                          <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">Diferença</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
                         {sumario.length > 0 ? (
-                          sumario.map((item) => (
-                            <tr key={item.ticker}>
-                              <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-primary-600 sm:pl-0">{item.ticker}</td>
-                              <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{item.nome}</td>
-                              <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
-                                {item.quantidade.toLocaleString('pt-BR', { minimumFractionDigits: 6 })}
-                              </td>
-                              <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
-                                {item.custoMedio.toLocaleString('pt-BR', { style: 'currency', currency: item.moeda })}
-                              </td>
-                              <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
-                                {item.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: item.moeda })}
-                              </td>
-                            </tr>
-                          ))
+                          sumario.map((item) => {
+                            const totalPortfolio = sumario.reduce((acc, curr) => acc + Math.abs(curr.valorTotal), 0);
+                            const currentPercentage = (Math.abs(item.valorTotal) / totalPortfolio) * 100;
+                            const desiredPercentage = Number(ativos.find(a => a.ticker === item.ticker)?.peso || 0);
+                            const difference = currentPercentage - desiredPercentage;
+                            const getDifferenceColor = (diff: number) => {
+                              const absValue = Math.abs(diff);
+                              if (absValue <= 1) return 'text-green-600'; // Within 1% is good
+                              if (absValue <= 3) return 'text-yellow-600'; // Within 3% is warning
+                              return 'text-red-600'; // More than 3% is bad
+                            };
+
+                            return (
+                              <tr key={item.ticker}>
+                                <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-primary-600 sm:pl-0">{item.ticker}</td>
+                                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{item.nome}</td>
+                                <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
+                                  {item.quantidade.toLocaleString('pt-BR', { minimumFractionDigits: 6 })}
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
+                                  {item.custoMedio.toLocaleString('pt-BR', { style: 'currency', currency: item.moeda })}
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
+                                  {item.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: item.moeda })}
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
+                                  {desiredPercentage.toFixed(2)}%
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
+                                  {currentPercentage.toFixed(2)}%
+                                </td>
+                                <td className={`whitespace-nowrap px-3 py-4 text-sm text-right font-medium ${getDifferenceColor(difference)}`}>
+                                  {difference > 0 ? '+' : ''}{difference.toFixed(2)}%
+                                  {Math.abs(difference) > 1 && (
+                                    <p className="text-xs mt-1">
+                                      {difference > 0 
+                                        ? `Reduzir ${difference.toFixed(2)}%`
+                                        : `Aumentar ${Math.abs(difference).toFixed(2)}%`}
+                                    </p>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
                         ) : (
                           <tr>
-                            <td colSpan={5} className="text-center py-4 text-sm text-gray-500">
+                            <td colSpan={8} className="text-center py-4 text-sm text-gray-500">
                               Nenhuma movimentação encontrada
                             </td>
                           </tr>

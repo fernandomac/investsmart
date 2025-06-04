@@ -158,13 +158,13 @@ const EvolucaoPatrimonialPage: React.FC = () => {
     labels: evolucaoData.map(item => format(new Date(item.data), 'dd/MM/yyyy', { locale: ptBR })),
     datasets: [
       {
-        label: 'Valor Atual',
+        label: 'Valor Patrimonial',
         data: evolucaoData.map(item => Number(item.valor_total) || 0),
         borderColor: 'rgb(75, 192, 192)',
         tension: 0.1,
       },
       {
-        label: 'Custo Total',
+        label: 'Valor Investido',
         data: evolucaoData.map(item => Number(item.custo_total) || 0),
         borderColor: 'rgb(255, 99, 132)',
         tension: 0.1,
@@ -273,16 +273,16 @@ const EvolucaoPatrimonialPage: React.FC = () => {
                           Preço Atual
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
-                          Custo Total
+                          Valor Investido
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
-                          Valor Total
+                          Valor Patrimonial
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
                           Resultado
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
-                          Variação %
+                          Performance %
                         </th>
                         <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
                           <span className="sr-only">Ações</span>
@@ -337,7 +337,7 @@ const EvolucaoPatrimonialPage: React.FC = () => {
                     </tbody>
                     <tfoot className="bg-gray-50">
                       <tr>
-                        <td colSpan={4} className="px-3 py-4 text-sm font-medium text-gray-500 text-right">
+                        <td colSpan={3} className="px-3 py-4 text-sm font-medium text-gray-500 text-right">
                           Total
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-sm text-right font-medium text-gray-500">

@@ -90,6 +90,9 @@ export type Ativo = {
   moeda: string;
   categoria: number;
   categoria_display: string;
+  peso: number;
+  dataVencimento: string | null;
+  anotacao: string;
   dataCriacao: string;
   dataAtualizacao: string;
 }
