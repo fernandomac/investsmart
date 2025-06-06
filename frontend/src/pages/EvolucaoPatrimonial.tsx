@@ -55,6 +55,7 @@ const EvolucaoPatrimonialPage: React.FC = () => {
           total_valor: 0,
           total_custo: 0,
           total_lucro_prejuizo: 0,
+          total_dividendos: 0,
           count_ativos: 0,
           ativos: [],
           isExpanded: false,
@@ -64,10 +65,12 @@ const EvolucaoPatrimonialPage: React.FC = () => {
       const valorTotal = Number(item.valor_total) || 0;
       const custoTotal = Number(item.custo_total) || 0;
       const lucroPrejuizo = Number(item.lucro_prejuizo) || 0;
+      const dividendosMes = Number(item.dividendos_mes) || 0;
       
       acc[monthKey].total_valor += valorTotal;
       acc[monthKey].total_custo += custoTotal;
       acc[monthKey].total_lucro_prejuizo += lucroPrejuizo;
+      acc[monthKey].total_dividendos += dividendosMes;
       acc[monthKey].count_ativos += 1;
       acc[monthKey].ativos.push(item);
       
@@ -324,6 +327,9 @@ const EvolucaoPatrimonialPage: React.FC = () => {
                           Valor Patrimonial
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
+                          Dividendos
+                        </th>
+                        <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
                           Resultado
                         </th>
                         <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
@@ -362,6 +368,9 @@ const EvolucaoPatrimonialPage: React.FC = () => {
                               <td className="whitespace-nowrap px-3 py-4 text-sm text-right font-medium text-blue-900">
                                 {formatCurrency(group.total_valor)}
                               </td>
+                              <td className="whitespace-nowrap px-3 py-4 text-sm text-right font-medium text-blue-900">
+                                {formatCurrency(group.total_dividendos)}
+                              </td>
                               <td className={`whitespace-nowrap px-3 py-4 text-sm text-right font-medium ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
                                 {formatCurrency(group.total_lucro_prejuizo)}
                               </td>
@@ -399,6 +408,9 @@ const EvolucaoPatrimonialPage: React.FC = () => {
                                   </td>
                                   <td className="whitespace-nowrap px-3 py-3 text-sm text-right text-gray-500">
                                     {formatCurrency(valorTotal)}
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-3 text-sm text-right text-gray-500">
+                                    {formatCurrency(Number(item.dividendos_mes) || 0)}
                                   </td>
                                   <td className={`whitespace-nowrap px-3 py-3 text-sm text-right ${isAssetPositive ? 'text-green-600' : 'text-red-600'}`}>
                                     {formatCurrency(resultado)}

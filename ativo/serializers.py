@@ -89,10 +89,10 @@ class EvolucaoPatrimonialSerializer(serializers.ModelSerializer):
     class Meta:
         model = EvolucaoPatrimonial
         fields = ['id', 'ativo', 'ativo_ticker', 'ativo_nome', 'categoria_nome', 'moeda',
-                 'data', 'preco_atual', 'quantidade', 'valor_total', 'custo_total',
+                 'data', 'preco_atual', 'quantidade', 'valor_total', 'custo_total', 'dividendos_mes',
                  'mes_ano_display', 'mes_ano_extenso', 'year_month_key',
                  'lucro_prejuizo', 'percentual_lucro_prejuizo']
-        read_only_fields = ['valor_total', 'custo_total']
+        read_only_fields = ['valor_total', 'custo_total', 'dividendos_mes']
 
     def validate(self, data):
         """

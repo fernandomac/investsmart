@@ -33,7 +33,7 @@ class DividendoAdmin(admin.ModelAdmin):
 
 @admin.register(EvolucaoPatrimonial)
 class EvolucaoPatrimonialAdmin(admin.ModelAdmin):
-    list_display = ['ativo', 'mes_ano_display', 'preco_atual', 'quantidade', 'valor_total', 'lucro_prejuizo_display']
+    list_display = ['ativo', 'mes_ano_display', 'preco_atual', 'quantidade', 'valor_total', 'dividendos_mes', 'lucro_prejuizo_display']
     list_filter = ['data', 'ativo__categoria', 'ativo__usuario']
     search_fields = ['ativo__ticker', 'ativo__nome']
     ordering = ['-data', 'ativo__ticker']
@@ -72,7 +72,7 @@ class EvolucaoPatrimonialAdmin(admin.ModelAdmin):
             'fields': ('ativo', 'data')
         }),
         ('Valores', {
-            'fields': ('preco_atual', 'quantidade', 'valor_total', 'custo_total')
+            'fields': ('preco_atual', 'quantidade', 'valor_total', 'custo_total', 'dividendos_mes')
         }),
         ('Análise', {
             'fields': ('lucro_prejuizo', 'percentual_lucro_prejuizo'),

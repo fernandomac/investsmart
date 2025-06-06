@@ -10,6 +10,7 @@ export interface EvolucaoPatrimonial {
     quantidade: string;
     valor_total: string;
     custo_total: string;
+    dividendos_mes: string;
     
     // Monthly display fields
     mes_ano_display: string;
@@ -40,6 +41,7 @@ export interface MonthlyGroup {
     total_valor: number;
     total_custo: number;
     total_lucro_prejuizo: number;
+    total_dividendos: number;
     count_ativos: number;
     ativos: EvolucaoPatrimonial[];
     isExpanded: boolean;

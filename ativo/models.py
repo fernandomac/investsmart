@@ -135,6 +135,7 @@ class EvolucaoPatrimonial(models.Model):
     quantidade = models.DecimalField(max_digits=10, decimal_places=6)
     valor_total = models.DecimalField(max_digits=10, decimal_places=2)
     custo_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    dividendos_mes = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Total de dividendos recebidos neste mês para este ativo")
     
     class Meta:
         ordering = ['-data', 'ativo__ticker']
