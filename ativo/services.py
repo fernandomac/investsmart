@@ -99,9 +99,12 @@ def calculate_current_cost(ativo: Ativo) -> Decimal:
 
 @transaction.atomic
 def create_snapshot(ativo: Ativo, snapshot_date: date = None) -> EvolucaoPatrimonial:
-    """Create a snapshot of the current asset value."""
+    """Create a monthly snapshot of the current asset value (always first day of month)."""
     if snapshot_date is None:
         snapshot_date = date.today()
+    
+    # Convert to first day of the month for monthly snapshots
+    monthly_date = snapshot_date.replace(day=1)
         
     try:
         # Get current price
@@ -118,17 +121,17 @@ def create_snapshot(ativo: Ativo, snapshot_date: date = None) -> EvolucaoPatrimo
         
         # Skip if both price and quantity are 0
         if current_price == Decimal('0.00') and quantidade == Decimal('0.00'):
-            print(f"Skipping snapshot for {ativo.ticker} - no price or quantity")
+            print(f"Skipping monthly snapshot for {ativo.ticker} - no price or quantity")
             return None
         
         # Calculate total value
         valor_total = current_price * quantidade
-        print(f"Will create snapshot for {ativo.ticker} with price={current_price}, quantidade={quantidade}, valor_total={valor_total}")
+        print(f"Will create monthly snapshot for {ativo.ticker} ({monthly_date.strftime('%m/%Y')}) with price={current_price}, quantidade={quantidade}, valor_total={valor_total}")
         
-        # Create or update snapshot with explicit save
+        # Create or update monthly snapshot (using first day of month)
         snapshot, created = EvolucaoPatrimonial.objects.update_or_create(
             ativo=ativo,
-            data=snapshot_date,
+            data=monthly_date,
             defaults={
                 'preco_atual': current_price.quantize(Decimal('0.01')),
                 'quantidade': quantidade.quantize(Decimal('0.000001')),
@@ -138,9 +141,9 @@ def create_snapshot(ativo: Ativo, snapshot_date: date = None) -> EvolucaoPatrimo
         )
         
         if created:
-            print(f"Created new snapshot for {ativo.ticker} with ID {snapshot.id}")
+            print(f"Created new monthly snapshot for {ativo.ticker} ({monthly_date.strftime('%m/%Y')}) with ID {snapshot.id}")
         else:
-            print(f"Updated snapshot for {ativo.ticker} with ID {snapshot.id}")
+            print(f"Updated monthly snapshot for {ativo.ticker} ({monthly_date.strftime('%m/%Y')}) with ID {snapshot.id}")
         
         # Verify the save
         snapshot.refresh_from_db()
@@ -148,17 +151,25 @@ def create_snapshot(ativo: Ativo, snapshot_date: date = None) -> EvolucaoPatrimo
         
         return snapshot
     except Exception as e:
-        print(f"Error creating snapshot for {ativo.ticker}: {str(e)}")
+        print(f"Error creating monthly snapshot for {ativo.ticker}: {str(e)}")
         raise
 
 def create_snapshots_for_all_assets(snapshot_date: date = None, user = None):
-    """Create snapshots for all active assets."""
+    """Create monthly snapshots for all active assets."""
+    if snapshot_date is None:
+        snapshot_date = date.today()
+    
+    # Convert to first day of the month
+    monthly_date = snapshot_date.replace(day=1)
+    
     queryset = Ativo.objects.all()
     if user is not None:
         queryset = queryset.filter(usuario=user)
+    
+    print(f"Creating monthly snapshots for {monthly_date.strftime('%m/%Y')}")
         
     for ativo in queryset:
         try:
             create_snapshot(ativo, snapshot_date)
         except Exception as e:
-            print(f"Error creating snapshot for {ativo.ticker}: {str(e)}") 
+            print(f"Error creating monthly snapshot for {ativo.ticker}: {str(e)}") 

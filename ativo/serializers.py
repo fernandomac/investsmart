@@ -76,21 +76,36 @@ class EvolucaoPatrimonialSerializer(serializers.ModelSerializer):
     ativo_nome = serializers.CharField(source='ativo.nome', read_only=True)
     categoria_nome = serializers.CharField(source='ativo.categoria_display', read_only=True)
     moeda = serializers.CharField(source='ativo.moeda', read_only=True)
+    
+    # Monthly display fields
+    mes_ano_display = serializers.ReadOnlyField()
+    mes_ano_extenso = serializers.ReadOnlyField()
+    year_month_key = serializers.ReadOnlyField()
+    
+    # Analysis fields
+    lucro_prejuizo = serializers.ReadOnlyField()
+    percentual_lucro_prejuizo = serializers.ReadOnlyField()
 
     class Meta:
         model = EvolucaoPatrimonial
         fields = ['id', 'ativo', 'ativo_ticker', 'ativo_nome', 'categoria_nome', 'moeda',
-                 'data', 'preco_atual', 'quantidade', 'valor_total', 'custo_total']
+                 'data', 'preco_atual', 'quantidade', 'valor_total', 'custo_total',
+                 'mes_ano_display', 'mes_ano_extenso', 'year_month_key',
+                 'lucro_prejuizo', 'percentual_lucro_prejuizo']
         read_only_fields = ['valor_total', 'custo_total']
 
     def validate(self, data):
         """
         Validate that preco_atual and quantidade are positive numbers.
         """
-        if 'preco_atual' in data and data['preco_atual'] <= 0:
-            raise serializers.ValidationError({'preco_atual': 'O preço atual deve ser maior que zero.'})
+        if 'preco_atual' in data and data['preco_atual'] < 0:
+            raise serializers.ValidationError("Preço atual deve ser positivo")
         
         if 'quantidade' in data and data['quantidade'] < 0:
-            raise serializers.ValidationError({'quantidade': 'A quantidade não pode ser negativa.'})
+            raise serializers.ValidationError("Quantidade deve ser positiva")
         
+        # Ensure data is always first day of month for monthly snapshots
+        if 'data' in data:
+            data['data'] = data['data'].replace(day=1)
+            
         return data

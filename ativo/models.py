@@ -141,9 +141,53 @@ class EvolucaoPatrimonial(models.Model):
         unique_together = ['ativo', 'data']
         
     def __str__(self):
-        return f"{self.ativo.ticker} - {self.data.strftime('%m/%Y')}"
+        return f"{self.ativo.ticker} - {self.mes_ano_display}"
 
     def save(self, *args, **kwargs):
         # Always calculate valor_total based on current price and quantity
         self.valor_total = self.preco_atual * self.quantidade
         super().save(*args, **kwargs)
+    
+    @property
+    def mes_ano_display(self):
+        """Display month/year in MM/YYYY format"""
+        return self.data.strftime('%m/%Y')
+    
+    @property 
+    def mes_ano_extenso(self):
+        """Display month/year in full format (e.g., 'Janeiro 2025')"""
+        return self.data.strftime('%B %Y')
+    
+    @property
+    def year_month_key(self):
+        """Return YYYY-MM key for grouping and filtering"""
+        return self.data.strftime('%Y-%m')
+    
+    @property
+    def lucro_prejuizo(self):
+        """Calculate profit/loss compared to cost"""
+        return self.valor_total - self.custo_total
+    
+    @property
+    def percentual_lucro_prejuizo(self):
+        """Calculate profit/loss percentage"""
+        if self.custo_total > 0:
+            return ((self.valor_total - self.custo_total) / self.custo_total) * 100
+        return 0
+    
+    @classmethod
+    def get_monthly_summary(cls, user=None):
+        """Get summary of monthly snapshots grouped by month"""
+        from django.db.models import Sum, Count
+        
+        queryset = cls.objects.all()
+        if user:
+            queryset = queryset.filter(ativo__usuario=user)
+            
+        return queryset.values(
+            'data__year', 'data__month'
+        ).annotate(
+            total_valor=Sum('valor_total'),
+            total_custo=Sum('custo_total'),
+            count_ativos=Count('ativo', distinct=True)
+        ).order_by('-data__year', '-data__month')

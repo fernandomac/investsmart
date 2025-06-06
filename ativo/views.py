@@ -7,6 +7,7 @@ from .models import Categoria, Ativo, Movimentacao, Dividendo, EvolucaoPatrimoni
 from .serializers import CategoriaSerializer, AtivoSerializer, MovimentacaoSerializer, DividendoSerializer, EvolucaoPatrimonialSerializer
 from .services import create_snapshot, create_snapshots_for_all_assets
 from datetime import date
+from django.db import models
 
 # Create your views here.
 
@@ -69,16 +70,70 @@ class EvolucaoPatrimonialViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'])
     def create_snapshots(self, request):
-        """Create snapshots for all assets."""
+        """Create monthly snapshots for all assets."""
         try:
             snapshot_date = date.today()
             if 'data' in request.data:
                 snapshot_date = date.fromisoformat(request.data['data'])
             
             create_snapshots_for_all_assets(snapshot_date, request.user)
-            return Response({'status': 'Snapshots created successfully'})
+            monthly_date = snapshot_date.replace(day=1)
+            return Response({
+                'message': f'Monthly snapshots created successfully for {monthly_date.strftime("%m/%Y")}'
+            })
         except Exception as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({'error': str(e)}, status=400)
+    
+    @action(detail=False, methods=['post'])
+    def create_monthly_snapshot(self, request):
+        """Create snapshot for a specific month (YYYY-MM format)."""
+        try:
+            year_month = request.data.get('year_month')  # Expected format: "2025-06"
+            if not year_month:
+                return Response({'error': 'year_month parameter required (format: YYYY-MM)'}, status=400)
+            
+            # Parse year and month
+            year, month = map(int, year_month.split('-'))
+            snapshot_date = date(year, month, 1)
+            
+            create_snapshots_for_all_assets(snapshot_date, request.user)
+            return Response({
+                'message': f'Monthly snapshots created successfully for {snapshot_date.strftime("%m/%Y")}'
+            })
+        except ValueError:
+            return Response({'error': 'Invalid year_month format. Use YYYY-MM'}, status=400)
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+    
+    @action(detail=False, methods=['get'])
+    def monthly_summary(self, request):
+        """Get summary of monthly snapshots grouped by month."""
+        try:
+            snapshots = self.get_queryset().values(
+                'data__year', 'data__month'
+            ).annotate(
+                total_valor=models.Sum('valor_total'),
+                total_custo=models.Sum('custo_total'),
+                count_ativos=models.Count('ativo', distinct=True)
+            ).order_by('-data__year', '-data__month')
+            
+            # Format the response
+            summary = []
+            for item in snapshots:
+                year = item['data__year']
+                month = item['data__month']
+                monthly_date = date(year, month, 1)
+                
+                summary.append({
+                    'year_month': f"{year}-{month:02d}",
+                    'display': monthly_date.strftime("%m/%Y"),
+                    'date': monthly_date.isoformat(),
+                    'total_valor': float(item['total_valor'] or 0),
+                    'total_custo': float(item['total_custo'] or 0),
+                    'count_ativos': item['count_ativos'],
+                    'lucro_prejuizo': float((item['total_valor'] or 0) - (item['total_custo'] or 0))
+                })
+            
+            return Response(summary)
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)

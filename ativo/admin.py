@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import Categoria, Ativo, Movimentacao, EvolucaoPatrimonial, Dividendo
+from django.utils.html import format_html
 
 @admin.register(Categoria)
 class CategoriaAdmin(admin.ModelAdmin):
@@ -32,7 +33,53 @@ class DividendoAdmin(admin.ModelAdmin):
 
 @admin.register(EvolucaoPatrimonial)
 class EvolucaoPatrimonialAdmin(admin.ModelAdmin):
-    list_display = ['ativo', 'data', 'preco_atual', 'quantidade', 'valor_total']
+    list_display = ['ativo', 'mes_ano_display', 'preco_atual', 'quantidade', 'valor_total', 'lucro_prejuizo_display']
     list_filter = ['data', 'ativo__categoria', 'ativo__usuario']
     search_fields = ['ativo__ticker', 'ativo__nome']
     ordering = ['-data', 'ativo__ticker']
+    readonly_fields = ['valor_total', 'mes_ano_extenso', 'year_month_key', 'lucro_prejuizo', 'percentual_lucro_prejuizo']
+    
+    def mes_ano_display(self, obj):
+        """Display month/year"""
+        return obj.mes_ano_display
+    mes_ano_display.short_description = 'Mês/Ano'
+    mes_ano_display.admin_order_field = 'data'
+    
+    def lucro_prejuizo_display(self, obj):
+        """Display profit/loss with color coding"""
+        lucro = obj.lucro_prejuizo
+        if lucro > 0:
+            color = 'green'
+            symbol = '+'
+        elif lucro < 0:
+            color = 'red'
+            symbol = ''
+        else:
+            color = 'black'
+            symbol = ''
+        
+        return format_html(
+            '<span style="color: {};">{}{}</span>',
+            color,
+            symbol,
+            lucro
+        )
+    lucro_prejuizo_display.short_description = 'Lucro/Prejuízo'
+    lucro_prejuizo_display.admin_order_field = 'valor_total'
+    
+    fieldsets = (
+        ('Informações Básicas', {
+            'fields': ('ativo', 'data')
+        }),
+        ('Valores', {
+            'fields': ('preco_atual', 'quantidade', 'valor_total', 'custo_total')
+        }),
+        ('Análise', {
+            'fields': ('lucro_prejuizo', 'percentual_lucro_prejuizo'),
+            'classes': ('collapse',)
+        }),
+        ('Informações Adicionais', {
+            'fields': ('mes_ano_extenso', 'year_month_key'),
+            'classes': ('collapse',)
+        }),
+    )
