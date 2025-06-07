@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { format } from 'date-fns'
 import api from '../services/api'
 import type { Movimentacao, MovimentacaoFormData, Operacao } from '../types/movimentacao'
@@ -28,12 +28,46 @@ export default function Movimentacoes() {
   })
   const [editingMovimentacao, setEditingMovimentacao] = useState<Movimentacao | null>(null)
 
-  useEffect(() => {
-    loadMovimentacoes()
-    loadAtivos()
-  }, [])
+  // Helper function to get ativo currency
+  const getAtivoCurrency = (ativoId: number): string => {
+    const ativo = ativos.find(a => a.id === ativoId)
+    return ativo?.moeda || 'BRL'
+  }
 
-  const loadMovimentacoes = async () => {
+  // Helper function to get currency symbol
+  const getCurrencySymbol = (currency: string): string => {
+    const symbols: { [key: string]: string } = {
+      'BRL': 'R$',
+      'USD': 'US$',
+      'EUR': '€',
+      'GBP': '£'
+    }
+    return symbols[currency] || currency
+  }
+
+  // Helper function to format currency based on ativo's currency
+  const formatCurrency = (value: number | string, ativoId: number): string => {
+    // Ensure value is a number
+    const numValue = typeof value === 'string' ? parseFloat(value) : value
+    
+    if (isNaN(numValue)) {
+      return 'R$ 0,00'
+    }
+    
+    if (!ativos || ativos.length === 0) {
+      return `R$ ${numValue.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`
+    }
+    
+    const currency = getAtivoCurrency(ativoId)
+    const symbol = getCurrencySymbol(currency)
+    
+    // Format number with appropriate decimal places and separators
+    const formattedNumber = numValue.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+    
+    return `${symbol} ${formattedNumber}`
+  }
+
+  const loadMovimentacoes = useCallback(async () => {
     try {
       const response = await api.get('/movimentacoes/')
       if (response.data && typeof response.data === 'object') {
@@ -50,9 +84,9 @@ export default function Movimentacoes() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [])
 
-  const loadAtivos = async () => {
+  const loadAtivos = useCallback(async () => {
     try {
       const response = await api.get('/ativos/')
       if (response.data && typeof response.data === 'object') {
@@ -67,7 +101,12 @@ export default function Movimentacoes() {
       console.error('Error loading ativos:', error)
       setError('Erro ao carregar ativos')
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    loadMovimentacoes()
+    loadAtivos()
+  }, [loadMovimentacoes, loadAtivos])
 
   const handleEdit = (movimentacao: Movimentacao) => {
     setEditingMovimentacao(movimentacao)
@@ -171,7 +210,7 @@ export default function Movimentacoes() {
                   {ativos && ativos.length > 0 ? (
                     ativos.map((ativo) => (
                       <option key={ativo.id} value={ativo.id}>
-                        {ativo.ticker} - {ativo.nome}
+                        {ativo.ticker} - {ativo.nome} ({ativo.moeda})
                       </option>
                     ))
                   ) : (
@@ -230,7 +269,7 @@ export default function Movimentacoes() {
 
               <div>
                 <label htmlFor="valorUnitario" className="block text-sm font-medium text-gray-700">
-                  Valor Unitário
+                  Valor Unitário {formData.ativo && `(${getAtivoCurrency(formData.ativo)})`}
                 </label>
                 <input
                   type="number"
@@ -245,7 +284,7 @@ export default function Movimentacoes() {
 
               <div>
                 <label htmlFor="taxa" className="block text-sm font-medium text-gray-700">
-                  Taxa
+                  Taxa {formData.ativo && `(${getAtivoCurrency(formData.ativo)})`}
                 </label>
                 <input
                   type="number"
@@ -328,13 +367,13 @@ export default function Movimentacoes() {
                           {movimentacao.quantidade.toLocaleString('pt-BR', { minimumFractionDigits: 6 })}
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
-                          {movimentacao.valorUnitario.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          {formatCurrency(movimentacao.valorUnitario, movimentacao.ativo)}
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
-                          {movimentacao.taxa.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          {formatCurrency(movimentacao.taxa, movimentacao.ativo)}
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
-                          {movimentacao.custoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          {formatCurrency(movimentacao.custoTotal, movimentacao.ativo)}
                         </td>
                         <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                           <button

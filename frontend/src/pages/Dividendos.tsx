@@ -17,33 +17,72 @@ export default function Dividendos() {
     valor: ''
   })
 
+  // Helper function to get ativo currency
+  const getAtivoCurrency = (ativoId: number): string => {
+    const ativo = ativos.find(a => a.id === ativoId)
+    return ativo?.moeda || 'BRL'
+  }
+
+  // Helper function to get currency symbol
+  const getCurrencySymbol = (currency: string): string => {
+    const symbols: { [key: string]: string } = {
+      'BRL': 'R$',
+      'USD': 'US$',
+      'EUR': '€',
+      'GBP': '£'
+    }
+    return symbols[currency] || currency
+  }
+
+  // Helper function to format currency based on ativo's currency
+  const formatCurrency = (value: number | string, ativoId: number): string => {
+    // Ensure value is a number
+    const numValue = typeof value === 'string' ? parseFloat(value) : value
+    
+    if (isNaN(numValue)) {
+      return 'R$ 0,00'
+    }
+    
+    if (!ativos || ativos.length === 0) {
+      return `R$ ${numValue.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`
+    }
+    
+    const currency = getAtivoCurrency(ativoId)
+    const symbol = getCurrencySymbol(currency)
+    
+    // Format number with appropriate decimal places and separators
+    const formattedNumber = numValue.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+    
+    return `${symbol} ${formattedNumber}`
+  }
+
   useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [dividendosResponse, ativosResponse] = await Promise.all([
+          api.get('/dividendos/'),
+          api.get('/ativos/')
+        ])
+        
+        // Ensure we have arrays, even if empty
+        const dividendosData = Array.isArray(dividendosResponse.data) ? dividendosResponse.data : []
+        const ativosData = Array.isArray(ativosResponse.data) ? ativosResponse.data : (ativosResponse.data?.results || [])
+        
+        setDividendos(dividendosData)
+        setAtivos(ativosData)
+        setLoading(false)
+      } catch (error) {
+        console.error('Error fetching data:', error)
+        setError('Erro ao carregar dados')
+        setLoading(false)
+        // Initialize with empty arrays on error
+        setDividendos([])
+        setAtivos([])
+      }
+    }
+
     fetchData()
   }, [])
-
-  const fetchData = async () => {
-    try {
-      const [dividendosResponse, ativosResponse] = await Promise.all([
-        api.get('/dividendos/'),
-        api.get('/ativos/')
-      ])
-      
-      // Ensure we have arrays, even if empty
-      const dividendosData = Array.isArray(dividendosResponse.data) ? dividendosResponse.data : []
-      const ativosData = Array.isArray(ativosResponse.data) ? ativosResponse.data : (ativosResponse.data?.results || [])
-      
-      setDividendos(dividendosData)
-      setAtivos(ativosData)
-      setLoading(false)
-    } catch (error) {
-      console.error('Error fetching data:', error)
-      setError('Erro ao carregar dados')
-      setLoading(false)
-      // Initialize with empty arrays on error
-      setDividendos([])
-      setAtivos([])
-    }
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -67,7 +106,18 @@ export default function Dividendos() {
         data: format(new Date(), 'yyyy-MM-dd'),
         valor: ''
       })
-      fetchData()
+      
+      // Refetch data after successful operation
+      const [dividendosResponse, ativosResponse] = await Promise.all([
+        api.get('/dividendos/'),
+        api.get('/ativos/')
+      ])
+      
+      const dividendosData = Array.isArray(dividendosResponse.data) ? dividendosResponse.data : []
+      const ativosData = Array.isArray(ativosResponse.data) ? ativosResponse.data : (ativosResponse.data?.results || [])
+      
+      setDividendos(dividendosData)
+      setAtivos(ativosData)
     } catch (error) {
       console.error('Error saving dividendo:', error)
       setError('Erro ao salvar dividendo')
@@ -91,7 +141,18 @@ export default function Dividendos() {
 
     try {
       await api.delete(`/dividendos/${id}/`)
-      fetchData()
+      
+      // Refetch data after successful deletion
+      const [dividendosResponse, ativosResponse] = await Promise.all([
+        api.get('/dividendos/'),
+        api.get('/ativos/')
+      ])
+      
+      const dividendosData = Array.isArray(dividendosResponse.data) ? dividendosResponse.data : []
+      const ativosData = Array.isArray(ativosResponse.data) ? ativosResponse.data : (ativosResponse.data?.results || [])
+      
+      setDividendos(dividendosData)
+      setAtivos(ativosData)
     } catch (error) {
       console.error('Error deleting dividendo:', error)
       setError('Erro ao excluir dividendo')
@@ -173,7 +234,7 @@ export default function Dividendos() {
                         {format(new Date(dividendo.data), 'dd/MM/yyyy')}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
-                        {dividendo.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        {formatCurrency(dividendo.valor, dividendo.ativo)}
                       </td>
                       <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
                         <button
@@ -230,7 +291,7 @@ export default function Dividendos() {
                         <option value="">Selecione um ativo</option>
                         {ativos && ativos.length > 0 && ativos.map((ativo) => (
                           <option key={ativo.id} value={ativo.id}>
-                            {ativo.ticker} - {ativo.nome}
+                            {ativo.ticker} - {ativo.nome} ({ativo.moeda})
                           </option>
                         ))}
                       </select>
@@ -256,7 +317,7 @@ export default function Dividendos() {
 
                   <div className="sm:col-span-3">
                     <label htmlFor="valor" className="block text-sm font-medium text-gray-700">
-                      Valor
+                      Valor {formData.ativo && `(${getAtivoCurrency(Number(formData.ativo))})`}
                     </label>
                     <div className="mt-1">
                       <input

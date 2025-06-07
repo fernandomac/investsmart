@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react'
-import type { Ativo, Categoria, TipoCategoria, SubtipoCategoria } from '../services/api'
+import type { Ativo, Categoria } from '../services/api'
 import { ativoService, categoriaService } from '../services/api'
 import { format } from 'date-fns'
 
 function Ativos() {
   const [ativos, setAtivos] = useState<Ativo[]>([])
   const [categorias, setCategorias] = useState<Categoria[]>([])
+  const [currencyFilter, setCurrencyFilter] = useState<string>('BRL')
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingAtivo, setEditingAtivo] = useState<Ativo | null>(null)
@@ -26,36 +27,24 @@ function Ativos() {
     { value: 'GBP', label: 'Libra (GBP)' },
   ]
 
-  const TIPO_DISPLAY: Record<TipoCategoria, string> = {
-    'RENDA_FIXA': 'Renda Fixa',
-    'RENDA_VARIAVEL': 'Renda Variável',
-    'FUNDOS': 'Fundos de Investimento',
-    'EXTERIOR': 'Investimentos no Exterior'
-  };
+  const getFilteredAtivos = () => {
+    return ativos.filter(ativo => ativo.moeda === currencyFilter)
+  }
 
-  const SUBTIPO_DISPLAY: Record<SubtipoCategoria, string> = {
-    'TESOURO_DIRETO': 'Tesouro Direto',
-    'CDB': 'CDB',
-    'LCI_LCA': 'LCI/LCA',
-    'DEBENTURES': 'Debêntures',
-    'CRI_CRA': 'CRI/CRA',
-    'POUPANCA': 'Poupança',
-    'ACOES': 'Ações',
-    'FII': 'FII',
-    'ETFS': 'ETFs',
-    'BDRS': 'BDRs',
-    'CRIPTO': 'Criptomoedas',
-    'FUNDO_RF': 'Fundos de Renda Fixa',
-    'FUNDO_MULTI': 'Fundos Multimercado',
-    'FUNDO_ACOES': 'Fundos de Ações',
-    'FUNDO_CAMBIAL': 'Fundos Cambiais',
-    'FUNDO_IMOB': 'Fundos Imobiliários',
-    'PREVIDENCIA': 'Previdência Privada',
-    'ETF_INTER': 'ETFs Internacionais',
-    'ACOES_INTER': 'Ações Globais',
-    'FUNDOS_INTER': 'Fundos Globais',
-    'REITS': 'REITs'
-  };
+  const getAvailableCurrencies = () => {
+    const currencies = Array.from(new Set(ativos.map(ativo => ativo.moeda)))
+    return currencies.sort()
+  }
+
+  const getCurrencyDisplayName = (currency: string) => {
+    const currencyNames: { [key: string]: string } = {
+      'BRL': 'Real (BRL)',
+      'USD': 'Dólar (USD)',
+      'EUR': 'Euro (EUR)',
+      'GBP': 'Libra (GBP)'
+    }
+    return currencyNames[currency] || currency
+  }
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -66,6 +55,14 @@ function Ativos() {
       ])
       setAtivos(ativosResponse.data.results)
       setCategorias(categoriasResponse.data)
+
+      // Set default currency to the first available currency if BRL is not available
+      if (ativosResponse.data.results.length > 0) {
+        const availableCurrencies = Array.from(new Set(ativosResponse.data.results.map(ativo => ativo.moeda)))
+        if (!availableCurrencies.includes('BRL') && availableCurrencies.length > 0) {
+          setCurrencyFilter(availableCurrencies[0] as string)
+        }
+      }
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
@@ -135,8 +132,9 @@ function Ativos() {
     }
   }
 
-  // Calculate total peso
-  const totalPeso = ativos.reduce((sum, ativo) => sum + Number(ativo.peso || 0), 0)
+  // Calculate total peso for the selected currency only
+  const filteredAtivos = getFilteredAtivos()
+  const totalPeso = filteredAtivos.reduce((sum, ativo) => sum + Number(ativo.peso || 0), 0)
   
   // Determine status color
   const getPesoStatusColor = (total: number) => {
@@ -155,7 +153,7 @@ function Ativos() {
 
   return (
     <div className="bg-gray-50 min-h-screen -mt-8 -mx-4 px-4 py-8 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-      <div className="sm:flex sm:items-center">
+      <div className="sm:flex sm:items-center sm:justify-between">
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-gray-800">Ativos</h1>
           <p className="mt-2 text-sm text-gray-600">
@@ -189,6 +187,27 @@ function Ativos() {
           >
             Adicionar Ativo
           </button>
+        </div>
+      </div>
+
+      {/* Currency Filter - Separate row */}
+      <div className="mt-6 flex justify-end">
+        <div>
+          <label htmlFor="currency-filter" className="block text-sm font-medium text-gray-700 mb-2">
+            Moeda
+          </label>
+          <select
+            id="currency-filter"
+            value={currencyFilter}
+            onChange={(e) => setCurrencyFilter(e.target.value)}
+            className="rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm min-w-[180px]"
+          >
+            {getAvailableCurrencies().map(currency => (
+              <option key={currency} value={currency}>
+                {getCurrencyDisplayName(currency)}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -277,19 +296,19 @@ function Ativos() {
                     type="number"
                     name="peso"
                     id="peso"
-                    value={formData.peso}
-                    onChange={(e) => setFormData({ ...formData, peso: e.target.value })}
+                    step="0.01"
                     min="0"
                     max="100"
-                    step="0.01"
+                    value={formData.peso}
+                    onChange={(e) => setFormData({ ...formData, peso: e.target.value })}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   />
-                  <p className="mt-1 text-sm text-gray-500">Porcentagem desejada do total (0-100)</p>
+                  <p className="mt-1 text-sm text-gray-500">Percentual desejado na carteira (por moeda)</p>
                 </div>
 
                 <div>
                   <label htmlFor="dataVencimento" className="block text-sm font-medium text-gray-700">
-                    Data de Vencimento
+                    Data de Vencimento (opcional)
                   </label>
                   <input
                     type="date"
@@ -299,7 +318,6 @@ function Ativos() {
                     onChange={(e) => setFormData({ ...formData, dataVencimento: e.target.value })}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   />
-                  <p className="mt-1 text-sm text-gray-500">Data de vencimento para investimentos de renda fixa</p>
                 </div>
 
                 <div>
@@ -358,7 +376,7 @@ function Ativos() {
                       Moeda
                     </th>
                     <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
-                      Peso (%)
+                      Peso ({currencyFilter}) (%)
                     </th>
                     <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
                       Vencimento
@@ -369,9 +387,9 @@ function Ativos() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
-                  {ativos.length > 0 ? (
+                  {filteredAtivos.length > 0 ? (
                     <>
-                      {ativos.map((ativo) => (
+                      {filteredAtivos.map((ativo) => (
                         <tr key={ativo.id}>
                           <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-primary-600 sm:pl-6">
                             {ativo.ticker}
@@ -405,7 +423,7 @@ function Ativos() {
                       ))}
                       <tr className="bg-gray-50">
                         <td colSpan={4} className="py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
-                          Total
+                          Total ({currencyFilter})
                         </td>
                         <td className={`whitespace-nowrap px-3 py-4 text-sm text-right font-medium ${getPesoStatusColor(totalPeso)}`}>
                           {totalPeso.toFixed(2)}%
@@ -423,7 +441,7 @@ function Ativos() {
                   ) : (
                     <tr>
                       <td colSpan={7} className="text-center py-4 text-sm text-gray-500">
-                        Nenhum ativo encontrado
+                        Nenhum ativo encontrado para {getCurrencyDisplayName(currencyFilter)}
                       </td>
                     </tr>
                   )}

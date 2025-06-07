@@ -15,7 +15,6 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import type { EvolucaoPatrimonial, EvolucaoPatrimonialData, MonthlyGroup } from '../types/evolucaoPatrimonial';
-import { formatCurrency } from '../utils/format';
 import api from '../services/api';
 
 ChartJS.register(
@@ -32,6 +31,7 @@ const EvolucaoPatrimonialPage: React.FC = () => {
   const [evolucaoData, setEvolucaoData] = useState<EvolucaoPatrimonialData[]>([]);
   const [rawData, setRawData] = useState<EvolucaoPatrimonial[]>([]);
   const [monthlyGroups, setMonthlyGroups] = useState<MonthlyGroup[]>([]);
+  const [currencyFilter, setCurrencyFilter] = useState<string>('BRL');
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,8 +43,28 @@ const EvolucaoPatrimonialPage: React.FC = () => {
     quantidade: '',
   });
 
+  const getFilteredData = (data: EvolucaoPatrimonial[]): EvolucaoPatrimonial[] => {
+    return data.filter(item => item.moeda === currencyFilter);
+  };
+
+  const getAvailableCurrencies = () => {
+    const currencies = Array.from(new Set(rawData.map(item => item.moeda)));
+    return currencies.sort();
+  };
+
+  const getCurrencyDisplayName = (currency: string) => {
+    const currencyNames: { [key: string]: string } = {
+      'BRL': 'Real (BRL)',
+      'USD': 'Dólar (USD)',
+      'EUR': 'Euro (EUR)',
+      'GBP': 'Libra (GBP)'
+    }
+    return currencyNames[currency] || currency;
+  };
+
   const groupDataByMonth = (data: EvolucaoPatrimonial[]): MonthlyGroup[] => {
-    const grouped = data.reduce((acc, item) => {
+    const filteredData = getFilteredData(data);
+    const grouped = filteredData.reduce((acc, item) => {
       const monthKey = item.year_month_key;
       
       if (!acc[monthKey]) {
@@ -82,8 +102,9 @@ const EvolucaoPatrimonialPage: React.FC = () => {
   };
 
   const processData = (data: EvolucaoPatrimonial[]) => {
+    const filteredData = getFilteredData(data);
     // Process data to group by date for the chart
-    const groupedData = data.reduce((acc: Record<string, EvolucaoPatrimonialData>, item) => {
+    const groupedData = filteredData.reduce((acc: Record<string, EvolucaoPatrimonialData>, item) => {
       const date = item.data.split('T')[0];
       if (!acc[date]) {
         acc[date] = {
@@ -136,6 +157,14 @@ const EvolucaoPatrimonialPage: React.FC = () => {
       // Group data by month for the table
       const groupedByMonth = groupDataByMonth(response.data);
       setMonthlyGroups(groupedByMonth);
+
+      // Set default currency to the first available currency if BRL is not available
+      if (response.data.length > 0) {
+        const availableCurrencies = Array.from(new Set(response.data.map((item: EvolucaoPatrimonial) => item.moeda)));
+        if (!availableCurrencies.includes('BRL') && availableCurrencies.length > 0) {
+          setCurrencyFilter(availableCurrencies[0] as string);
+        }
+      }
     } catch (err) {
       console.error('Error fetching data:', err);
       setError('Erro ao carregar dados de evolução patrimonial');
@@ -143,6 +172,18 @@ const EvolucaoPatrimonialPage: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  // Update data when currency filter changes
+  useEffect(() => {
+    if (rawData.length > 0) {
+      const processedData = processData(rawData);
+      setEvolucaoData(processedData);
+      
+      // Group data by month for the table
+      const groupedByMonth = groupDataByMonth(rawData);
+      setMonthlyGroups(groupedByMonth);
+    }
+  }, [currencyFilter, rawData]);
 
   const createSnapshots = async () => {
     try {
@@ -234,13 +275,16 @@ const EvolucaoPatrimonialPage: React.FC = () => {
       },
       title: {
         display: true,
-        text: 'Evolução Patrimonial Mensal',
+        text: `Evolução Patrimonial Mensal (${currencyFilter})`,
       },
       tooltip: {
         callbacks: {
           label: (context: any) => {
             const label = context.dataset.label;
-            const value = formatCurrency(context.raw);
+            const value = context.raw.toLocaleString('pt-BR', {
+              style: 'currency',
+              currency: currencyFilter
+            });
             return `${label}: ${value}`;
           },
         },
@@ -250,7 +294,10 @@ const EvolucaoPatrimonialPage: React.FC = () => {
       y: {
         ticks: {
           callback: function(value: string | number) {
-            return formatCurrency(Number(value));
+            return Number(value).toLocaleString('pt-BR', {
+              style: 'currency',
+              currency: currencyFilter
+            });
           },
         },
       },
@@ -259,14 +306,15 @@ const EvolucaoPatrimonialPage: React.FC = () => {
 
   return (
     <div className="bg-gray-50 min-h-screen -mt-8 -mx-4 px-4 py-8 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-      <div className="sm:flex sm:items-center">
+      <div className="sm:flex sm:items-center sm:justify-between">
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-gray-800">Evolução Patrimonial</h1>
           <p className="mt-2 text-sm text-gray-600">
             Acompanhe a evolução do valor dos seus investimentos organizados por mês.
           </p>
         </div>
-        <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none flex gap-2">
+        
+        <div className="mt-4 sm:mt-0 sm:flex-none flex gap-2">
           <button
             type="button"
             onClick={fetchData}
@@ -282,6 +330,27 @@ const EvolucaoPatrimonialPage: React.FC = () => {
           >
             {isUpdating ? 'Criando...' : 'Criar Snapshot Mensal'}
           </button>
+        </div>
+      </div>
+
+      {/* Currency Filter - Separate row */}
+      <div className="mt-6 flex justify-end">
+        <div>
+          <label htmlFor="currency-filter" className="block text-sm font-medium text-gray-700 mb-2">
+            Moeda
+          </label>
+          <select
+            id="currency-filter"
+            value={currencyFilter}
+            onChange={(e) => setCurrencyFilter(e.target.value)}
+            className="rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm min-w-[180px]"
+          >
+            {getAvailableCurrencies().map(currency => (
+              <option key={currency} value={currency}>
+                {getCurrencyDisplayName(currency)}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -304,139 +373,152 @@ const EvolucaoPatrimonialPage: React.FC = () => {
       ) : (
         <>
           <div className="mt-8 bg-white rounded-lg shadow p-6">
-            <Line data={chartData} options={chartOptions} />
+            {evolucaoData.length > 0 ? (
+              <Line data={chartData} options={chartOptions} />
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                Nenhum dado encontrado para {getCurrencyDisplayName(currencyFilter)}
+              </div>
+            )}
           </div>
 
           <div className="mt-8 flow-root">
             <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
               <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
                 <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg bg-white">
-                  <table className="min-w-full divide-y divide-gray-300">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">
-                          Mês/Ano
-                        </th>
-                        <th scope="col" className="px-3 py-3.5 text-center text-sm font-semibold text-gray-900">
-                          Ativos
-                        </th>
-                        <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
-                          Valor Investido
-                        </th>
-                        <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
-                          Valor Patrimonial
-                        </th>
-                        <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
-                          Dividendos
-                        </th>
-                        <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
-                          Resultado
-                        </th>
-                        <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
-                          Performance %
-                        </th>
-                        <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                          <span className="sr-only">Ações</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 bg-white">
-                      {monthlyGroups.map((group) => {
-                        const isPositive = group.total_lucro_prejuizo >= 0;
-                        const variacao = group.total_custo !== 0 ? (group.total_lucro_prejuizo / group.total_custo) * 100 : 0;
+                  {monthlyGroups.length > 0 ? (
+                    <table className="min-w-full divide-y divide-gray-300">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">
+                            Mês/Ano ({currencyFilter})
+                          </th>
+                          <th scope="col" className="px-3 py-3.5 text-center text-sm font-semibold text-gray-900">
+                            Ativos
+                          </th>
+                          <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
+                            Valor Investido
+                          </th>
+                          <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
+                            Valor Patrimonial
+                          </th>
+                          <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
+                            Dividendos
+                          </th>
+                          <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
+                            Resultado
+                          </th>
+                          <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
+                            Performance %
+                          </th>
+                          <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
+                            <span className="sr-only">Ações</span>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 bg-white">
+                        {monthlyGroups.map((group) => {
+                          const isPositive = group.total_lucro_prejuizo >= 0;
+                          const variacao = group.total_custo !== 0 ? (group.total_lucro_prejuizo / group.total_custo) * 100 : 0;
 
-                        return (
-                          <React.Fragment key={group.year_month_key}>
-                            {/* Monthly Summary Row */}
-                            <tr className="bg-blue-50 hover:bg-blue-100 cursor-pointer" onClick={() => toggleMonthExpansion(group.year_month_key)}>
-                              <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-semibold text-blue-900 sm:pl-6">
-                                <div className="flex items-center">
-                                  {group.isExpanded ? (
-                                    <ChevronDownIcon className="h-4 w-4 mr-2" />
-                                  ) : (
-                                    <ChevronRightIcon className="h-4 w-4 mr-2" />
-                                  )}
-                                  {group.mes_ano_extenso}
-                                </div>
-                              </td>
-                              <td className="whitespace-nowrap px-3 py-4 text-sm text-center font-medium text-blue-900">
-                                {group.count_ativos}
-                              </td>
-                              <td className="whitespace-nowrap px-3 py-4 text-sm text-right font-medium text-blue-900">
-                                {formatCurrency(group.total_custo)}
-                              </td>
-                              <td className="whitespace-nowrap px-3 py-4 text-sm text-right font-medium text-blue-900">
-                                {formatCurrency(group.total_valor)}
-                              </td>
-                              <td className="whitespace-nowrap px-3 py-4 text-sm text-right font-medium text-blue-900">
-                                {formatCurrency(group.total_dividendos)}
-                              </td>
-                              <td className={`whitespace-nowrap px-3 py-4 text-sm text-right font-medium ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                                {formatCurrency(group.total_lucro_prejuizo)}
-                              </td>
-                              <td className={`whitespace-nowrap px-3 py-4 text-sm text-right font-medium ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                                {variacao.toFixed(2)}%
-                              </td>
-                              <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                                <span className="text-blue-600 text-xs">
-                                  {group.isExpanded ? 'Fechar' : 'Expandir'}
-                                </span>
-                              </td>
-                            </tr>
+                          return (
+                            <React.Fragment key={group.year_month_key}>
+                              {/* Monthly Summary Row */}
+                              <tr className="bg-blue-50 hover:bg-blue-100 cursor-pointer" onClick={() => toggleMonthExpansion(group.year_month_key)}>
+                                <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-semibold text-blue-900 sm:pl-6">
+                                  <div className="flex items-center">
+                                    {group.isExpanded ? (
+                                      <ChevronDownIcon className="h-4 w-4 mr-2" />
+                                    ) : (
+                                      <ChevronRightIcon className="h-4 w-4 mr-2" />
+                                    )}
+                                    {group.mes_ano_extenso}
+                                  </div>
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-4 text-sm text-center font-medium text-blue-900">
+                                  {group.count_ativos}
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-4 text-sm text-right font-medium text-blue-900">
+                                  {group.total_custo.toLocaleString('pt-BR', { style: 'currency', currency: currencyFilter })}
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-4 text-sm text-right font-medium text-blue-900">
+                                  {group.total_valor.toLocaleString('pt-BR', { style: 'currency', currency: currencyFilter })}
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-4 text-sm text-right font-medium text-blue-900">
+                                  {group.total_dividendos.toLocaleString('pt-BR', { style: 'currency', currency: currencyFilter })}
+                                </td>
+                                <td className={`whitespace-nowrap px-3 py-4 text-sm text-right font-medium ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                                  {group.total_lucro_prejuizo.toLocaleString('pt-BR', { style: 'currency', currency: currencyFilter })}
+                                </td>
+                                <td className={`whitespace-nowrap px-3 py-4 text-sm text-right font-medium ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
+                                  {variacao.toFixed(2)}%
+                                </td>
+                                <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                                  <span className="text-blue-600 text-xs">
+                                    {group.isExpanded ? 'Fechar' : 'Expandir'}
+                                  </span>
+                                </td>
+                              </tr>
 
-                            {/* Individual Asset Rows (when expanded) */}
-                            {group.isExpanded && group.ativos.map((item, index) => {
-                              const custoTotal = Number(item.custo_total) || 0;
-                              const valorTotal = Number(item.valor_total) || 0;
-                              const resultado = Number(item.lucro_prejuizo) || 0;
-                              const isAssetPositive = resultado >= 0;
-                              const assetVariacao = Number(item.percentual_lucro_prejuizo) || 0;
+                              {/* Individual Asset Rows (when expanded) */}
+                              {group.isExpanded && group.ativos.map((item, index) => {
+                                const custoTotal = Number(item.custo_total) || 0;
+                                const valorTotal = Number(item.valor_total) || 0;
+                                const resultado = Number(item.lucro_prejuizo) || 0;
+                                const isAssetPositive = resultado >= 0;
+                                const assetVariacao = Number(item.percentual_lucro_prejuizo) || 0;
 
-                              return (
-                                <tr key={`${item.ativo_ticker}-${item.data}-${index}`} className="bg-gray-25">
-                                  <td className="whitespace-nowrap py-3 pl-8 pr-3 text-sm text-gray-600 sm:pl-12">
-                                    <div className="flex items-center">
-                                      <span className="text-primary-600 font-medium">{item.ativo_ticker}</span>
-                                      <span className="text-xs text-gray-400 ml-2">({item.ativo_nome})</span>
-                                    </div>
-                                  </td>
-                                  <td className="whitespace-nowrap px-3 py-3 text-sm text-center text-gray-500">
-                                    {Number(item.quantidade).toFixed(6)}
-                                  </td>
-                                  <td className="whitespace-nowrap px-3 py-3 text-sm text-right text-gray-500">
-                                    {formatCurrency(custoTotal)}
-                                  </td>
-                                  <td className="whitespace-nowrap px-3 py-3 text-sm text-right text-gray-500">
-                                    {formatCurrency(valorTotal)}
-                                  </td>
-                                  <td className="whitespace-nowrap px-3 py-3 text-sm text-right text-gray-500">
-                                    {formatCurrency(Number(item.dividendos_mes) || 0)}
-                                  </td>
-                                  <td className={`whitespace-nowrap px-3 py-3 text-sm text-right ${isAssetPositive ? 'text-green-600' : 'text-red-600'}`}>
-                                    {formatCurrency(resultado)}
-                                  </td>
-                                  <td className={`whitespace-nowrap px-3 py-3 text-sm text-right ${isAssetPositive ? 'text-green-600' : 'text-red-600'}`}>
-                                    {assetVariacao.toFixed(2)}%
-                                  </td>
-                                  <td className="relative whitespace-nowrap py-3 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleEdit(item);
-                                      }}
-                                      className="text-primary-600 hover:text-primary-900 bg-transparent"
-                                    >
-                                      Editar
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </React.Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                                return (
+                                  <tr key={`${item.ativo_ticker}-${item.data}-${index}`} className="bg-gray-25">
+                                    <td className="whitespace-nowrap py-3 pl-8 pr-3 text-sm text-gray-600 sm:pl-12">
+                                      <div className="flex items-center">
+                                        <span className="text-primary-600 font-medium">{item.ativo_ticker}</span>
+                                        <span className="text-xs text-gray-400 ml-2">({item.ativo_nome})</span>
+                                        <span className="text-xs text-gray-400 ml-2">{item.moeda}</span>
+                                      </div>
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-3 text-sm text-center text-gray-500">
+                                      {Number(item.quantidade).toFixed(6)}
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-3 text-sm text-right text-gray-500">
+                                      {custoTotal.toLocaleString('pt-BR', { style: 'currency', currency: currencyFilter })}
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-3 text-sm text-right text-gray-500">
+                                      {valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: currencyFilter })}
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-3 text-sm text-right text-gray-500">
+                                      {(Number(item.dividendos_mes) || 0).toLocaleString('pt-BR', { style: 'currency', currency: currencyFilter })}
+                                    </td>
+                                    <td className={`whitespace-nowrap px-3 py-3 text-sm text-right ${isAssetPositive ? 'text-green-600' : 'text-red-600'}`}>
+                                      {resultado.toLocaleString('pt-BR', { style: 'currency', currency: currencyFilter })}
+                                    </td>
+                                    <td className={`whitespace-nowrap px-3 py-3 text-sm text-right ${isAssetPositive ? 'text-green-600' : 'text-red-600'}`}>
+                                      {assetVariacao.toFixed(2)}%
+                                    </td>
+                                    <td className="relative whitespace-nowrap py-3 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleEdit(item);
+                                        }}
+                                        className="text-primary-600 hover:text-primary-900 bg-transparent"
+                                      >
+                                        Editar
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      Nenhum dado encontrado para {getCurrencyDisplayName(currencyFilter)}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

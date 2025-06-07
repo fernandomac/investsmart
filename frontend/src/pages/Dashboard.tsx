@@ -52,6 +52,7 @@ export default function Dashboard() {
   const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([])
   const [dividendos, setDividendos] = useState<Dividendo[]>([])
   const [dividendosGroupBy, setDividendosGroupBy] = useState<'ativo' | 'categoria'>('ativo')
+  const [currencyFilter, setCurrencyFilter] = useState<string>('BRL')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -77,6 +78,14 @@ export default function Dashboard() {
         setAtivos(ativos)
         setMovimentacoes(movimentacoes)
         setDividendos(dividendos)
+
+        // Set default currency to the first available currency if BRL is not available
+        if (ativos.length > 0) {
+          const availableCurrencies = Array.from(new Set(ativos.map((ativo: Ativo) => ativo.moeda)))
+          if (!availableCurrencies.includes('BRL') && availableCurrencies.length > 0) {
+            setCurrencyFilter(availableCurrencies[0] as string)
+          }
+        }
       } catch (error) {
         console.error('Error fetching data:', error)
         setError('Erro ao carregar dados')
@@ -88,11 +97,16 @@ export default function Dashboard() {
     fetchData()
   }, [])
 
+  const getFilteredAtivos = () => {
+    return ativos.filter(ativo => ativo.moeda === currencyFilter)
+  }
+
   const calcularSumario = (): MovimentacaoSummary[] => {
     const sumario: { [key: string]: MovimentacaoSummary } = {}
+    const filteredAtivos = getFilteredAtivos()
 
-    // Initialize summary with all ativos
-    ativos.forEach(ativo => {
+    // Initialize summary with filtered ativos only
+    filteredAtivos.forEach(ativo => {
       sumario[ativo.ticker] = {
         ticker: ativo.ticker,
         nome: ativo.nome,
@@ -105,9 +119,9 @@ export default function Dashboard() {
       }
     })
 
-    // Calculate totals from movimentacoes
+    // Calculate totals from movimentacoes for filtered ativos only
     movimentacoes.forEach(mov => {
-      const ativo = ativos.find(a => a.id === mov.ativo)
+      const ativo = filteredAtivos.find(a => a.id === mov.ativo)
       if (!ativo) return
 
       const summary = sumario[ativo.ticker]
@@ -170,6 +184,7 @@ export default function Dashboard() {
   const calcularDividendosMensais = () => {
     // Create a map to store monthly dividends
     const dividendosPorMes: { [key: string]: { [key: string]: number } } = {}
+    const filteredAtivos = getFilteredAtivos()
     
     // Get last 12 months
     const hoje = new Date()
@@ -190,7 +205,7 @@ export default function Dashboard() {
       // Skip if not in last 12 months
       if (!ultimos12Meses.includes(mesAno)) return
       
-      const ativo = ativos.find(a => a.id === dividendo.ativo)
+      const ativo = filteredAtivos.find(a => a.id === dividendo.ativo)
       if (!ativo) return
       
       const chave = dividendosGroupBy === 'ativo' ? ativo.ticker : ativo.categoria_display || 'Sem categoria'
@@ -202,15 +217,16 @@ export default function Dashboard() {
       dividendosPorMes[mesAno][chave] += Number(dividendo.valor)
     })
     
-    // Get unique labels (ativos or categorias)
+    // Get unique labels (ativos or categorias) from filtered ativos
     const labels = Array.from(new Set(
       dividendos
         .map(d => {
-          const ativo = ativos.find(a => a.id === d.ativo)
+          const ativo = filteredAtivos.find(a => a.id === d.ativo)
           if (!ativo) return 'Desconhecido'
           return dividendosGroupBy === 'ativo' ? ativo.ticker : (ativo.categoria_display || 'Sem categoria')
         })
-    )).filter(label => label !== 'Desconhecido')
+        .filter(label => label !== 'Desconhecido')
+    ))
     
     // Calculate total for percentages
     const totalPorMes = ultimos12Meses.map(mes => {
@@ -263,6 +279,21 @@ export default function Dashboard() {
     } as const
   }
 
+  const getAvailableCurrencies = () => {
+    const currencies = Array.from(new Set(ativos.map(ativo => ativo.moeda)))
+    return currencies.sort()
+  }
+
+  const getCurrencyDisplayName = (currency: string) => {
+    const currencyNames: { [key: string]: string } = {
+      'BRL': 'Real (BRL)',
+      'USD': 'Dólar (USD)',
+      'EUR': 'Euro (EUR)',
+      'GBP': 'Libra (GBP)'
+    }
+    return currencyNames[currency] || currency
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -281,6 +312,7 @@ export default function Dashboard() {
 
   const sumario = calcularSumario()
   const sumarioCategorias = calcularSumarioPorCategoria(sumario)
+  const filteredAtivos = getFilteredAtivos()
 
   const chartData = {
     labels: sumario.map(item => {
@@ -396,12 +428,31 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="sm:flex sm:items-center">
+        <div className="sm:flex sm:items-center sm:justify-between">
           <div className="sm:flex-auto">
             <h1 className="text-2xl font-semibold text-gray-800">Dashboard</h1>
             <p className="mt-2 text-sm text-gray-600">
               Visão geral da sua carteira de investimentos.
             </p>
+          </div>
+          
+          {/* Currency Filter */}
+          <div className="mt-4 sm:mt-0 sm:ml-4">
+            <label htmlFor="currency-filter" className="block text-sm font-medium text-gray-700 mb-2">
+              Moeda
+            </label>
+            <select
+              id="currency-filter"
+              value={currencyFilter}
+              onChange={(e) => setCurrencyFilter(e.target.value)}
+              className="rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm min-w-[180px]"
+            >
+              {getAvailableCurrencies().map(currency => (
+                <option key={currency} value={currency}>
+                  {getCurrencyDisplayName(currency)}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
         
@@ -411,13 +462,15 @@ export default function Dashboard() {
             {/* Asset Distribution Chart */}
             <div className="bg-white rounded-lg shadow">
               <div className="p-6">
-                <h3 className="text-base font-semibold leading-6 text-gray-900">Distribuição por Ativo</h3>
+                <h3 className="text-base font-semibold leading-6 text-gray-900">
+                  Distribuição por Ativo ({currencyFilter})
+                </h3>
                 <div className="mt-4 aspect-square w-full">
                   {sumario.length > 0 ? (
                     <Pie data={chartData} options={chartOptions} />
                   ) : (
                     <p className="text-center py-4 text-sm text-gray-500">
-                      Nenhuma movimentação encontrada
+                      Nenhum ativo encontrado para {getCurrencyDisplayName(currencyFilter)}
                     </p>
                   )}
                 </div>
@@ -427,13 +480,15 @@ export default function Dashboard() {
             {/* Category Distribution Chart */}
             <div className="bg-white rounded-lg shadow">
               <div className="p-6">
-                <h3 className="text-base font-semibold leading-6 text-gray-900">Distribuição por Categoria</h3>
+                <h3 className="text-base font-semibold leading-6 text-gray-900">
+                  Distribuição por Categoria ({currencyFilter})
+                </h3>
                 <div className="mt-4 aspect-square w-full">
                   {sumarioCategorias.length > 0 ? (
                     <Pie data={categoriaChartData} options={chartOptions} />
                   ) : (
                     <p className="text-center py-4 text-sm text-gray-500">
-                      Nenhuma categoria encontrada
+                      Nenhuma categoria encontrada para {getCurrencyDisplayName(currencyFilter)}
                     </p>
                   )}
                 </div>
@@ -444,7 +499,9 @@ export default function Dashboard() {
           {/* New monthly dividends chart */}
           <div className="bg-white shadow rounded-lg p-6 xl:col-span-2">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-medium text-gray-900">Dividendos Mensais</h2>
+              <h2 className="text-lg font-medium text-gray-900">
+                Dividendos Mensais ({currencyFilter})
+              </h2>
               <select
                 value={dividendosGroupBy}
                 onChange={(e) => setDividendosGroupBy(e.target.value as 'ativo' | 'categoria')}
@@ -478,7 +535,7 @@ export default function Dashboard() {
                         callback: (value) => {
                           return value.toLocaleString('pt-BR', {
                             style: 'currency',
-                            currency: 'BRL'
+                            currency: currencyFilter
                           })
                         }
                       }
@@ -492,7 +549,9 @@ export default function Dashboard() {
           {/* Sumário de Movimentações */}
           <div className="bg-white rounded-lg shadow">
             <div className="p-6">
-              <h3 className="text-base font-semibold leading-6 text-gray-900">Posição Atual por Ativo</h3>
+              <h3 className="text-base font-semibold leading-6 text-gray-900">
+                Posição Atual por Ativo ({currencyFilter})
+              </h3>
               <div className="mt-6 flow-root">
                 <div className="overflow-x-auto">
                   <div className="inline-block min-w-full align-middle">
@@ -514,7 +573,7 @@ export default function Dashboard() {
                           sumario.map((item) => {
                             const totalPortfolio = sumario.reduce((acc, curr) => acc + Math.abs(curr.valorTotal), 0);
                             const currentPercentage = (Math.abs(item.valorTotal) / totalPortfolio) * 100;
-                            const desiredPercentage = Number(ativos.find(a => a.ticker === item.ticker)?.peso || 0);
+                            const desiredPercentage = Number(filteredAtivos.find(a => a.ticker === item.ticker)?.peso || 0);
                             const difference = currentPercentage - desiredPercentage;
                             const getDifferenceColor = (diff: number) => {
                               const absValue = Math.abs(diff);
@@ -558,7 +617,7 @@ export default function Dashboard() {
                         ) : (
                           <tr>
                             <td colSpan={8} className="text-center py-4 text-sm text-gray-500">
-                              Nenhuma movimentação encontrada
+                              Nenhum ativo encontrado para {getCurrencyDisplayName(currencyFilter)}
                             </td>
                           </tr>
                         )}
@@ -573,15 +632,18 @@ export default function Dashboard() {
           {/* Ativos Recentes */}
           <div className="bg-white rounded-lg shadow">
             <div className="p-6">
-              <h3 className="text-base font-semibold leading-6 text-gray-900">Ativos Recentes</h3>
+              <h3 className="text-base font-semibold leading-6 text-gray-900">
+                Ativos Recentes ({currencyFilter})
+              </h3>
               <div className="mt-6 divide-y divide-gray-200">
-                {ativos.length > 0 ? (
-                  ativos.map((ativo) => (
+                {filteredAtivos.length > 0 ? (
+                  filteredAtivos.map((ativo) => (
                     <div key={ativo.id} className="py-4">
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm font-medium text-primary-600">{ativo.ticker}</p>
                           <p className="text-sm text-gray-500">{ativo.nome}</p>
+                          <p className="text-xs text-gray-400">{ativo.moeda}</p>
                         </div>
                         <div className="text-sm text-gray-500">
                           {new Date(ativo.dataCriacao).toLocaleDateString()}
@@ -590,7 +652,9 @@ export default function Dashboard() {
                     </div>
                   ))
                 ) : (
-                  <p className="py-4 text-sm text-gray-500">Nenhum ativo cadastrado.</p>
+                  <p className="py-4 text-sm text-gray-500">
+                    Nenhum ativo encontrado para {getCurrencyDisplayName(currencyFilter)}
+                  </p>
                 )}
               </div>
             </div>
