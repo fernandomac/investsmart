@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import type { Ativo } from '../types/ativo'
+import type { Ativo } from '../services/api'
 import type { Movimentacao } from '../types/movimentacao'
 import type { Dividendo } from '../types/dividendo'
-import api from '../services/api'
+import api, { ativoService } from '../services/api'
 import {
   Chart as ChartJS,
   ArcElement,
@@ -57,17 +57,32 @@ export default function Dashboard() {
   const [error, setError] = useState('')
 
   useEffect(() => {
+    const fetchAllAtivos = async () => {
+      let allAtivos: Ativo[] = [];
+      let nextUrl: string | null = '/ativos/?page=1&page_size=100000';
+      while (nextUrl) {
+        // Remove base URL if present
+        const url: string = nextUrl.startsWith('http') ? nextUrl.replace('http://localhost:8000/api', '') : nextUrl;
+        const response: any = await api.get(url);
+        const data: any = response.data;
+        if (Array.isArray(data.results)) {
+          allAtivos = allAtivos.concat(data.results);
+        } else if (Array.isArray(data)) {
+          allAtivos = allAtivos.concat(data);
+        }
+        nextUrl = data.next;
+      }
+      return allAtivos;
+    };
+
     const fetchData = async () => {
       try {
-        const [ativosResponse, movimentacoesResponse, dividendosResponse] = await Promise.all([
-          api.get('/ativos/'),
+        // Fetch all ativos (all pages)
+        const [allAtivos, movimentacoesResponse, dividendosResponse] = await Promise.all([
+          fetchAllAtivos(),
           api.get('/movimentacoes/'),
           api.get('/dividendos/')
         ])
-        
-        // Handle both paginated and non-paginated responses
-        const ativos = Array.isArray(ativosResponse.data) ? ativosResponse.data :
-                      Array.isArray(ativosResponse.data.results) ? ativosResponse.data.results : []
         
         const movimentacoes = Array.isArray(movimentacoesResponse.data) ? movimentacoesResponse.data :
                              Array.isArray(movimentacoesResponse.data.results) ? movimentacoesResponse.data.results : []
@@ -75,13 +90,13 @@ export default function Dashboard() {
         const dividendos = Array.isArray(dividendosResponse.data) ? dividendosResponse.data :
                           Array.isArray(dividendosResponse.data.results) ? dividendosResponse.data.results : []
         
-        setAtivos(ativos)
+        setAtivos(allAtivos)
         setMovimentacoes(movimentacoes)
         setDividendos(dividendos)
 
         // Set default currency to the first available currency if BRL is not available
-        if (ativos.length > 0) {
-          const availableCurrencies = Array.from(new Set(ativos.map((ativo: Ativo) => ativo.moeda)))
+        if (allAtivos.length > 0) {
+          const availableCurrencies = Array.from(new Set(allAtivos.map((ativo: Ativo) => ativo.moeda)))
           if (!availableCurrencies.includes('BRL') && availableCurrencies.length > 0) {
             setCurrencyFilter(availableCurrencies[0] as string)
           }
@@ -311,17 +326,20 @@ export default function Dashboard() {
   }
 
   const sumario = calcularSumario()
-  const sumarioCategorias = calcularSumarioPorCategoria(sumario)
+  console.log('DASHBOARD sumario:', sumario)
+  // Only include ativos with quantidade > 0 in the charts
+  const sumarioWithPositiveQuantity = sumario.filter(item => item.quantidade > 0)
+  const sumarioCategorias = calcularSumarioPorCategoria(sumarioWithPositiveQuantity)
   const filteredAtivos = getFilteredAtivos()
 
   const chartData = {
-    labels: sumario.map(item => {
-      const percentage = (Math.abs(item.valorTotal) / sumario.reduce((acc, curr) => acc + Math.abs(curr.valorTotal), 0) * 100).toFixed(1)
+    labels: sumarioWithPositiveQuantity.map(item => {
+      const percentage = (Math.abs(item.valorTotal) / sumarioWithPositiveQuantity.reduce((acc, curr) => acc + Math.abs(curr.valorTotal), 0) * 100).toFixed(1)
       return `${item.ticker} (${item.moeda}) - ${percentage}%`
     }),
     datasets: [
       {
-        data: sumario.map(item => Math.abs(item.valorTotal)),
+        data: sumarioWithPositiveQuantity.map(item => Math.abs(item.valorTotal)),
         backgroundColor: [
           '#3B82F6', // blue-500
           '#10B981', // emerald-500

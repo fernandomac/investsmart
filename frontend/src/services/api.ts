@@ -113,11 +113,54 @@ export const categoriaService = {
 };
 
 export const ativoService = {
-  getAll: () => api.get<PaginatedResponse<Ativo>>('/ativos/'),
+  getAll: (page?: number, pageSize?: number) => {
+    const params = new URLSearchParams();
+    if (page) params.append('page', page.toString());
+    if (pageSize) params.append('page_size', pageSize.toString());
+    
+    const queryString = params.toString();
+    const url = queryString ? `/ativos/?${queryString}` : '/ativos/';
+    
+    return api.get<PaginatedResponse<Ativo>>(url);
+  },
   getById: (id: number) => api.get<Ativo>(`/ativos/${id}/`),
   create: (data: Partial<Ativo>) => api.post<Ativo>('/ativos/', data),
   update: (id: number, data: Partial<Ativo>) => api.put<Ativo>(`/ativos/${id}/`, data),
   delete: (id: number) => api.delete(`/ativos/${id}/`),
+};
+
+export type Movimentacao = {
+  id: number;
+  ativo: number;
+  ativo_display: string;
+  data: string;
+  operacao: string;
+  operacao_display: string;
+  quantidade: number;
+  valorUnitario: number;
+  taxa: number;
+  custoTotal: number;
+  dataCriacao: string;
+  dataAlteracao: string;
+};
+
+export const movimentacaoService = {
+  getAll: (page?: number, pageSize?: number, year?: number, ticker?: string) => {
+    const params = new URLSearchParams();
+    if (page) params.append('page', page.toString());
+    if (pageSize) params.append('page_size', pageSize.toString());
+    if (year) params.append('year', year.toString());
+    if (ticker) params.append('ticker', ticker);
+    
+    const queryString = params.toString();
+    const url = queryString ? `/movimentacoes/?${queryString}` : '/movimentacoes/';
+    
+    return api.get<PaginatedResponse<Movimentacao>>(url);
+  },
+  getById: (id: number) => api.get<Movimentacao>(`/movimentacoes/${id}/`),
+  create: (data: any) => api.post<Movimentacao>('/movimentacoes/', data),
+  update: (id: number, data: any) => api.put<Movimentacao>(`/movimentacoes/${id}/`, data),
+  delete: (id: number) => api.delete(`/movimentacoes/${id}/`),
 };
 
 export default api; 

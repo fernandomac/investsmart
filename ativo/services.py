@@ -93,6 +93,11 @@ def create_snapshot(ativo: Ativo, snapshot_date: date = None) -> EvolucaoPatrimo
         quantidade = calculate_current_quantity(ativo)
         print(f"Calculated quantity for {ativo.ticker}: {quantidade}")
         
+        # Only create snapshot if quantidade > 0
+        if quantidade <= 0:
+            print(f"Skipping monthly snapshot for {ativo.ticker} - quantidade <= 0")
+            return None
+        
         # Calculate total cost
         custo_total = calculate_current_cost(ativo)
         print(f"Calculated cost for {ativo.ticker}: {custo_total}")
@@ -100,11 +105,6 @@ def create_snapshot(ativo: Ativo, snapshot_date: date = None) -> EvolucaoPatrimo
         # Calculate monthly dividends
         dividendos_mes = calculate_monthly_dividends(ativo, monthly_date)
         print(f"Calculated monthly dividends for {ativo.ticker}: {dividendos_mes}")
-        
-        # Skip if both price and quantity are 0
-        if current_price == Decimal('0.00') and quantidade == Decimal('0.00'):
-            print(f"Skipping monthly snapshot for {ativo.ticker} - no price or quantity")
-            return None
         
         # Calculate total value
         valor_total = current_price * quantidade
@@ -138,7 +138,7 @@ def create_snapshot(ativo: Ativo, snapshot_date: date = None) -> EvolucaoPatrimo
         raise
 
 def create_snapshots_for_all_assets(snapshot_date: date = None, user = None):
-    """Create monthly snapshots for all active assets."""
+    """Create monthly snapshots for all active assets with quantidade > 0."""
     if snapshot_date is None:
         snapshot_date = date.today()
     
@@ -153,6 +153,10 @@ def create_snapshots_for_all_assets(snapshot_date: date = None, user = None):
         
     for ativo in queryset:
         try:
-            create_snapshot(ativo, snapshot_date)
+            quantidade = calculate_current_quantity(ativo)
+            if quantidade > 0:
+                create_snapshot(ativo, snapshot_date)
+            else:
+                print(f"Skipping snapshot for {ativo.ticker} - quantidade <= 0")
         except Exception as e:
             print(f"Error creating monthly snapshot for {ativo.ticker}: {str(e)}") 

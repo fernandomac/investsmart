@@ -11,9 +11,9 @@ import {
   Legend,
 } from 'chart.js';
 import type { ChartData } from 'chart.js';
-import { format } from 'date-fns';
+import { format, subMonths, startOfMonth, endOfMonth, isAfter, isBefore, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon, ChevronRightIcon, CalendarIcon } from '@heroicons/react/24/outline';
 import type { EvolucaoPatrimonial, EvolucaoPatrimonialData, MonthlyGroup } from '../types/evolucaoPatrimonial';
 import api from '../services/api';
 
@@ -42,9 +42,33 @@ const EvolucaoPatrimonialPage: React.FC = () => {
     preco_atual: '',
     quantidade: '',
   });
+  
+  // Date range filtering
+  const [dateRange, setDateRange] = useState<{
+    startDate: string;
+    endDate: string;
+    preset: string;
+  }>({
+    startDate: '',
+    endDate: '',
+    preset: 'all'
+  });
 
   const getFilteredData = (data: EvolucaoPatrimonial[]): EvolucaoPatrimonial[] => {
-    return data.filter(item => item.moeda === currencyFilter);
+    let filtered = data.filter(item => item.moeda === currencyFilter);
+    
+    // Apply date range filter
+    if (dateRange.startDate && dateRange.endDate) {
+      const startDate = parseISO(dateRange.startDate);
+      const endDate = parseISO(dateRange.endDate);
+      
+      filtered = filtered.filter(item => {
+        const itemDate = parseISO(item.data);
+        return !isBefore(itemDate, startDate) && !isAfter(itemDate, endDate);
+      });
+    }
+    
+    return filtered;
   };
 
   const getAvailableCurrencies = () => {
@@ -60,6 +84,41 @@ const EvolucaoPatrimonialPage: React.FC = () => {
       'GBP': 'Libra (GBP)'
     }
     return currencyNames[currency] || currency;
+  };
+
+  const setDateRangePreset = (preset: string) => {
+    const now = new Date();
+    let startDate = '';
+    let endDate = format(now, 'yyyy-MM-dd');
+
+    switch (preset) {
+      case '3m':
+        startDate = format(subMonths(now, 3), 'yyyy-MM-dd');
+        break;
+      case '6m':
+        startDate = format(subMonths(now, 6), 'yyyy-MM-dd');
+        break;
+      case '1y':
+        startDate = format(subMonths(now, 12), 'yyyy-MM-dd');
+        break;
+      case '2y':
+        startDate = format(subMonths(now, 24), 'yyyy-MM-dd');
+        break;
+      case 'ytd':
+        startDate = format(new Date(now.getFullYear(), 0, 1), 'yyyy-MM-dd');
+        break;
+      case 'all':
+      default:
+        startDate = '';
+        endDate = '';
+        break;
+    }
+
+    setDateRange({
+      startDate,
+      endDate,
+      preset
+    });
   };
 
   const groupDataByMonth = (data: EvolucaoPatrimonial[]): MonthlyGroup[] => {
@@ -173,7 +232,7 @@ const EvolucaoPatrimonialPage: React.FC = () => {
     }
   };
 
-  // Update data when currency filter changes
+  // Update data when currency filter or date range changes
   useEffect(() => {
     if (rawData.length > 0) {
       const processedData = processData(rawData);
@@ -183,7 +242,7 @@ const EvolucaoPatrimonialPage: React.FC = () => {
       const groupedByMonth = groupDataByMonth(rawData);
       setMonthlyGroups(groupedByMonth);
     }
-  }, [currencyFilter, rawData]);
+  }, [currencyFilter, dateRange, rawData]);
 
   const createSnapshots = async () => {
     try {
@@ -267,6 +326,29 @@ const EvolucaoPatrimonialPage: React.FC = () => {
     ],
   };
 
+  const getChartTitle = () => {
+    let title = `Evolução Patrimonial Mensal (${currencyFilter})`;
+    
+    if (dateRange.startDate && dateRange.endDate) {
+      const startFormatted = format(parseISO(dateRange.startDate), 'MMM/yyyy', { locale: ptBR });
+      const endFormatted = format(parseISO(dateRange.endDate), 'MMM/yyyy', { locale: ptBR });
+      title += ` - ${startFormatted} a ${endFormatted}`;
+    } else if (dateRange.preset !== 'all') {
+      const presetLabels: { [key: string]: string } = {
+        '3m': 'Últimos 3 Meses',
+        '6m': 'Últimos 6 Meses',
+        '1y': 'Último Ano',
+        '2y': 'Últimos 2 Anos',
+        'ytd': 'Ano Atual'
+      };
+      if (presetLabels[dateRange.preset]) {
+        title += ` - ${presetLabels[dateRange.preset]}`;
+      }
+    }
+    
+    return title;
+  };
+
   const chartOptions = {
     responsive: true,
     plugins: {
@@ -275,7 +357,7 @@ const EvolucaoPatrimonialPage: React.FC = () => {
       },
       title: {
         display: true,
-        text: `Evolução Patrimonial Mensal (${currencyFilter})`,
+        text: getChartTitle(),
       },
       tooltip: {
         callbacks: {
@@ -333,24 +415,59 @@ const EvolucaoPatrimonialPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Currency Filter - Separate row */}
-      <div className="mt-6 flex justify-end">
-        <div>
-          <label htmlFor="currency-filter" className="block text-sm font-medium text-gray-700 mb-2">
-            Moeda
-          </label>
-          <select
-            id="currency-filter"
-            value={currencyFilter}
-            onChange={(e) => setCurrencyFilter(e.target.value)}
-            className="rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm min-w-[180px]"
-          >
-            {getAvailableCurrencies().map(currency => (
-              <option key={currency} value={currency}>
-                {getCurrencyDisplayName(currency)}
-              </option>
+      {/* Filters */}
+      <div className="mt-6 space-y-4">
+        {/* Date Range Filter */}
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="flex items-center mb-4">
+            <CalendarIcon className="h-5 w-5 text-gray-400 mr-2" />
+            <h3 className="text-sm font-medium text-gray-700">Período</h3>
+          </div>
+          
+          {/* Preset Buttons */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            {[
+              { key: 'all', label: 'Todos' },
+              { key: '3m', label: '3 Meses' },
+              { key: '6m', label: '6 Meses' },
+              { key: 'ytd', label: 'Ano Atual' },
+              { key: '1y', label: '1 Ano' },
+              { key: '2y', label: '2 Anos' }
+            ].map(preset => (
+              <button
+                key={preset.key}
+                onClick={() => setDateRangePreset(preset.key)}
+                className={`px-3 py-1 text-xs font-medium rounded-md ${
+                  dateRange.preset === preset.key
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {preset.label}
+              </button>
             ))}
-          </select>
+          </div>
+        </div>
+
+        {/* Currency Filter */}
+        <div className="flex justify-end">
+          <div>
+            <label htmlFor="currency-filter" className="block text-sm font-medium text-gray-700 mb-2">
+              Moeda
+            </label>
+            <select
+              id="currency-filter"
+              value={currencyFilter}
+              onChange={(e) => setCurrencyFilter(e.target.value)}
+              className="rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm min-w-[180px]"
+            >
+              {getAvailableCurrencies().map(currency => (
+                <option key={currency} value={currency}>
+                  {getCurrencyDisplayName(currency)}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -469,7 +586,7 @@ const EvolucaoPatrimonialPage: React.FC = () => {
                                 const assetVariacao = Number(item.percentual_lucro_prejuizo) || 0;
 
                                 return (
-                                  <tr key={`${item.ativo_ticker}-${item.data}-${index}`} className="bg-gray-25">
+                                  <tr key={`${group.year_month_key}-${item.id}-${item.ativo_ticker}-${index}`} className="bg-gray-25">
                                     <td className="whitespace-nowrap py-3 pl-8 pr-3 text-sm text-gray-600 sm:pl-12">
                                       <div className="flex items-center">
                                         <span className="text-primary-600 font-medium">{item.ativo_ticker}</span>

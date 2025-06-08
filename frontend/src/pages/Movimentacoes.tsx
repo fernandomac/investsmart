@@ -1,8 +1,7 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { format } from 'date-fns'
-import api from '../services/api'
-import type { Movimentacao, MovimentacaoFormData, Operacao } from '../types/movimentacao'
-import type { Ativo } from '../types/ativo'
+import { movimentacaoService, ativoService, type Movimentacao, type Ativo } from '../services/api'
+import type { MovimentacaoFormData, Operacao } from '../types/movimentacao'
 
 const OPERACAO_OPTIONS = [
   { value: 'COMPRA', label: 'Compra' },
@@ -18,6 +17,17 @@ export default function Movimentacoes() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [showForm, setShowForm] = useState(false)
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [pageSize] = useState(10) // Match backend PAGE_SIZE
+  
+  // Filter state
+  const [yearFilter, setYearFilter] = useState<number | ''>('')
+  const [tickerFilter, setTickerFilter] = useState('')
+  
   const [formData, setFormData] = useState<MovimentacaoFormData>({
     ativo: 0,
     data: format(new Date(), 'yyyy-MM-dd'),
@@ -27,6 +37,8 @@ export default function Movimentacoes() {
     taxa: 0,
   })
   const [editingMovimentacao, setEditingMovimentacao] = useState<Movimentacao | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [importing, setImporting] = useState(false)
 
   // Helper function to get ativo currency
   const getAtivoCurrency = (ativoId: number): string => {
@@ -67,16 +79,34 @@ export default function Movimentacoes() {
     return `${symbol} ${formattedNumber}`
   }
 
-  const loadMovimentacoes = useCallback(async () => {
+  // Get available years for filter (2020 to current year + 1)
+  const getAvailableYears = (): number[] => {
+    const currentYear = new Date().getFullYear()
+    const startYear = 2020
+    const endYear = currentYear + 1
+    const years = []
+    for (let year = endYear; year >= startYear; year--) {
+      years.push(year)
+    }
+    return years
+  }
+
+  const loadMovimentacoes = useCallback(async (page: number = 1, resetPage: boolean = false) => {
+    setIsLoading(true)
     try {
-      const response = await api.get('/movimentacoes/')
-      if (response.data && typeof response.data === 'object') {
-        // If response.data is an object with results property (DRF pagination)
-        const movimentacoes = Array.isArray(response.data.results) ? response.data.results : 
-                            Array.isArray(response.data) ? response.data : []
-        setMovimentacoes(movimentacoes)
+      const year = yearFilter === '' ? undefined : yearFilter
+      const ticker = tickerFilter === '' ? undefined : tickerFilter
+      
+      const response = await movimentacaoService.getAll(page, pageSize, year, ticker)
+      
+      setMovimentacoes(response.data.results)
+      setTotalCount(response.data.count)
+      setTotalPages(Math.ceil(response.data.count / pageSize))
+      
+      if (resetPage) {
+        setCurrentPage(1)
       } else {
-        setMovimentacoes([])
+        setCurrentPage(page)
       }
     } catch (error) {
       console.error('Error loading movimentacoes:', error)
@@ -84,19 +114,12 @@ export default function Movimentacoes() {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [yearFilter, tickerFilter, pageSize])
 
   const loadAtivos = useCallback(async () => {
     try {
-      const response = await api.get('/ativos/')
-      if (response.data && typeof response.data === 'object') {
-        // If response.data is an object with results property (DRF pagination)
-        const ativos = Array.isArray(response.data.results) ? response.data.results : 
-                      Array.isArray(response.data) ? response.data : []
-        setAtivos(ativos)
-      } else {
-        setAtivos([])
-      }
+      const response = await ativoService.getAll(1, 1000) // Large page size to get all
+      setAtivos(response.data.results)
     } catch (error) {
       console.error('Error loading ativos:', error)
       setError('Erro ao carregar ativos')
@@ -104,16 +127,32 @@ export default function Movimentacoes() {
   }, [])
 
   useEffect(() => {
-    loadMovimentacoes()
     loadAtivos()
-  }, [loadMovimentacoes, loadAtivos])
+    loadMovimentacoes(1, true)
+  }, [loadAtivos, loadMovimentacoes])
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      loadMovimentacoes(newPage)
+    }
+  }
+
+  const handleFilterChange = () => {
+    loadMovimentacoes(1, true) // Reset to page 1 when filters change
+  }
+
+  const clearFilters = () => {
+    setYearFilter('')
+    setTickerFilter('')
+    // loadMovimentacoes will be called by useEffect when state changes
+  }
 
   const handleEdit = (movimentacao: Movimentacao) => {
     setEditingMovimentacao(movimentacao)
     setFormData({
       ativo: movimentacao.ativo,
       data: format(new Date(movimentacao.data), 'yyyy-MM-dd'),
-      operacao: movimentacao.operacao,
+      operacao: movimentacao.operacao as Operacao,
       quantidade: movimentacao.quantidade,
       valorUnitario: movimentacao.valorUnitario,
       taxa: movimentacao.taxa,
@@ -126,8 +165,8 @@ export default function Movimentacoes() {
       return
     }
     try {
-      await api.delete(`/movimentacoes/${id}/`)
-      loadMovimentacoes()
+      await movimentacaoService.delete(id)
+      loadMovimentacoes(currentPage)
     } catch (error) {
       setError('Erro ao excluir movimentação')
     }
@@ -137,11 +176,11 @@ export default function Movimentacoes() {
     e.preventDefault()
     try {
       if (editingMovimentacao) {
-        await api.put(`/movimentacoes/${editingMovimentacao.id}/`, formData)
+        await movimentacaoService.update(editingMovimentacao.id, formData)
       } else {
-        await api.post('/movimentacoes/', formData)
+        await movimentacaoService.create(formData)
       }
-      loadMovimentacoes()
+      loadMovimentacoes(currentPage)
       setShowForm(false)
       setFormData({
         ativo: 0,
@@ -154,6 +193,55 @@ export default function Movimentacoes() {
       setEditingMovimentacao(null)
     } catch (error) {
       setError('Erro ao salvar movimentação')
+    }
+  }
+
+  // Helper for pagination page numbers
+  const getPageNumbers = () => {
+    const pages = [];
+    let start = Math.max(1, currentPage - 2);
+    let end = Math.min(totalPages, start + 4);
+    if (end - start < 4) {
+      start = Math.max(1, end - 4);
+    }
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
+  const handleImportClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+      fileInputRef.current.click()
+    }
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    const formData = new FormData()
+    formData.append('file', file)
+    try {
+      const token = localStorage.getItem('accessToken')
+      const response = await fetch('http://localhost:8000/api/movimentacoes/import_excel/', {
+        method: 'POST',
+        body: formData,
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        credentials: 'include',
+      })
+      const data = await response.json()
+      if (response.ok) {
+        alert(data.message || 'Movimentações importadas com sucesso!')
+        loadMovimentacoes(1, true)
+      } else {
+        alert(data.error || 'Erro ao importar movimentações.')
+      }
+    } catch (err) {
+      alert('Erro ao importar movimentações.')
+    } finally {
+      setImporting(false)
     }
   }
 
@@ -188,6 +276,84 @@ export default function Movimentacoes() {
           >
             Adicionar Movimentação
           </button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="mt-6 bg-white shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg p-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+          <div>
+            <label htmlFor="year-filter" className="block text-sm font-medium text-gray-700">
+              Ano
+            </label>
+            <select
+              id="year-filter"
+              value={yearFilter}
+              onChange={(e) => {
+                const value = e.target.value === '' ? '' : parseInt(e.target.value)
+                setYearFilter(value)
+              }}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+            >
+              <option value="">Todos os anos</option>
+              {getAvailableYears().map(year => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="ticker-filter" className="block text-sm font-medium text-gray-700">
+              Ticker
+            </label>
+            <input
+              type="text"
+              id="ticker-filter"
+              value={tickerFilter}
+              onChange={(e) => setTickerFilter(e.target.value)}
+              placeholder="Digite o ticker..."
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+            />
+          </div>
+
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={handleFilterChange}
+              className="w-full rounded-md bg-primary-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+            >
+              Filtrar
+            </button>
+          </div>
+
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="w-full rounded-md bg-gray-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-gray-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600"
+            >
+              Limpar Filtros
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-4">
+          <button
+            type="button"
+            onClick={handleImportClick}
+            className="inline-flex items-center px-4 py-2 border border-primary-600 text-primary-600 rounded-md bg-white hover:bg-primary-50 disabled:opacity-50"
+            disabled={importing}
+          >
+            {importing ? 'Importando...' : 'Importar Movimentações (XLSX)'}
+          </button>
+          <input
+            type="file"
+            accept=".xlsx"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+          />
         </div>
       </div>
 
@@ -403,6 +569,79 @@ export default function Movimentacoes() {
             </div>
           </div>
         </div>
+        
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+            <div className="flex-1 flex justify-between sm:hidden">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Anterior
+              </button>
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Próximo
+              </button>
+            </div>
+            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-gray-700">
+                  Mostrando <span className="font-medium">{(currentPage - 1) * pageSize + 1}</span> a{' '}
+                  <span className="font-medium">
+                    {Math.min(currentPage * pageSize, totalCount)}
+                  </span>{' '}
+                  de <span className="font-medium">{totalCount}</span> movimentações
+                </p>
+              </div>
+              <div>
+                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span className="sr-only">Anterior</span>
+                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  
+                  {/* Page Numbers */}
+                  {getPageNumbers().map(page => (
+                    <button
+                      key={`movimentacoes-page-${page}`}
+                      onClick={() => handlePageChange(page)}
+                      className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                        page === currentPage
+                          ? 'z-10 bg-primary-50 border-primary-500 text-primary-600'
+                          : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                  
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span className="sr-only">Próximo</span>
+                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </nav>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

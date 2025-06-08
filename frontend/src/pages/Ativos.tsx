@@ -10,6 +10,14 @@ function Ativos() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingAtivo, setEditingAtivo] = useState<Ativo | null>(null)
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [pageSize] = useState(10) // Match backend PAGE_SIZE
+  const [allAtivos, setAllAtivos] = useState<Ativo[]>([]) // For peso calculation across all pages
+  
   const [formData, setFormData] = useState({
     ticker: '',
     nome: '',
@@ -32,8 +40,12 @@ function Ativos() {
   }
 
   const getAvailableCurrencies = () => {
-    const currencies = Array.from(new Set(ativos.map(ativo => ativo.moeda)))
+    const currencies = Array.from(new Set(allAtivos.map(ativo => ativo.moeda)))
     return currencies.sort()
+  }
+
+  const getAllFilteredAtivos = () => {
+    return allAtivos.filter(ativo => ativo.moeda === currencyFilter)
   }
 
   const getCurrencyDisplayName = (currency: string) => {
@@ -46,33 +58,61 @@ function Ativos() {
     return currencyNames[currency] || currency
   }
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
+  const fetchAllAtivos = useCallback(async () => {
     try {
-      const [ativosResponse, categoriasResponse] = await Promise.all([
-        ativoService.getAll(),
-        categoriaService.getAll()
-      ])
-      setAtivos(ativosResponse.data.results)
-      setCategorias(categoriasResponse.data)
-
+      // Fetch all ativos without pagination for peso calculation and currency filter
+      const response = await ativoService.getAll(1, 1000) // Large page size to get all
+      setAllAtivos(response.data.results)
+      
       // Set default currency to the first available currency if BRL is not available
-      if (ativosResponse.data.results.length > 0) {
-        const availableCurrencies = Array.from(new Set(ativosResponse.data.results.map(ativo => ativo.moeda)))
+      if (response.data.results.length > 0) {
+        const availableCurrencies = Array.from(new Set(response.data.results.map(ativo => ativo.moeda)))
         if (!availableCurrencies.includes('BRL') && availableCurrencies.length > 0) {
           setCurrencyFilter(availableCurrencies[0] as string)
         }
       }
     } catch (error) {
+      console.error('Error fetching all ativos:', error)
+    }
+  }, [])
+
+  const fetchData = useCallback(async (page: number = 1) => {
+    setLoading(true)
+    try {
+      const [ativosResponse, categoriasResponse] = await Promise.all([
+        ativoService.getAll(page, pageSize),
+        categoriaService.getAll()
+      ])
+      
+      // Handle paginated response
+      setAtivos(ativosResponse.data.results)
+      setTotalCount(ativosResponse.data.count)
+      setTotalPages(Math.ceil(ativosResponse.data.count / pageSize))
+      setCurrentPage(page)
+      
+      setCategorias(categoriasResponse.data)
+    } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [pageSize])
 
   useEffect(() => {
-    fetchData()
-  }, [fetchData])
+    fetchAllAtivos()
+    fetchData(1)
+  }, [fetchAllAtivos, fetchData])
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      fetchData(newPage)
+    }
+  }
+
+  const handleRefresh = () => {
+    fetchAllAtivos()
+    fetchData(currentPage)
+  }
 
   const handleEdit = (ativo: Ativo) => {
     setEditingAtivo(ativo)
@@ -114,7 +154,10 @@ function Ativos() {
         await ativoService.create(data)
       }
       
-      await fetchData() // Refresh data after creating/updating asset
+      await Promise.all([
+        fetchAllAtivos(), // Refresh all ativos for peso calculation
+        fetchData(currentPage) // Refresh current page data
+      ])
       setShowForm(false)
       setFormData({ ticker: '', nome: '', moeda: '', categoria: '', peso: '0', dataVencimento: '', anotacao: '' })
       setEditingAtivo(null)
@@ -132,9 +175,10 @@ function Ativos() {
     }
   }
 
-  // Calculate total peso for the selected currency only
+  // Calculate total peso for the selected currency across all ativos (not just current page)
   const filteredAtivos = getFilteredAtivos()
-  const totalPeso = filteredAtivos.reduce((sum, ativo) => sum + Number(ativo.peso || 0), 0)
+  const allFilteredAtivos = getAllFilteredAtivos()
+  const totalPeso = allFilteredAtivos.reduce((sum, ativo) => sum + Number(ativo.peso || 0), 0)
   
   // Determine status color
   const getPesoStatusColor = (total: number) => {
@@ -142,6 +186,20 @@ function Ativos() {
     if (total < 100) return 'text-yellow-600'
     return 'text-red-600'
   }
+
+  // Helper for pagination page numbers
+  const getPageNumbers = () => {
+    const pages = [];
+    let start = Math.max(1, currentPage - 2);
+    let end = Math.min(totalPages, start + 4);
+    if (end - start < 4) {
+      start = Math.max(1, end - 4);
+    }
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
 
   if (loading) {
     return (
@@ -163,7 +221,7 @@ function Ativos() {
         <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none flex gap-2">
           <button
             type="button"
-            onClick={fetchData}
+            onClick={handleRefresh}
             className="rounded-md bg-gray-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-gray-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600"
           >
             Atualizar
@@ -450,6 +508,79 @@ function Ativos() {
             </div>
           </div>
         </div>
+        
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+            <div className="flex-1 flex justify-between sm:hidden">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Anterior
+              </button>
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Próximo
+              </button>
+            </div>
+            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-gray-700">
+                  Mostrando <span className="font-medium">{(currentPage - 1) * pageSize + 1}</span> a{' '}
+                  <span className="font-medium">
+                    {Math.min(currentPage * pageSize, totalCount)}
+                  </span>{' '}
+                  de <span className="font-medium">{totalCount}</span> ativos
+                </p>
+              </div>
+              <div>
+                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span className="sr-only">Anterior</span>
+                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  
+                  {/* Page Numbers */}
+                  {getPageNumbers().map(page => (
+                    <button
+                      key={`page-${page}`}
+                      onClick={() => handlePageChange(page)}
+                      className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                        page === currentPage
+                          ? 'z-10 bg-primary-50 border-primary-500 text-primary-600'
+                          : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                  
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span className="sr-only">Próximo</span>
+                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </nav>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -8,6 +8,14 @@ from .serializers import CategoriaSerializer, AtivoSerializer, MovimentacaoSeria
 from .services import create_snapshot, create_snapshots_for_all_assets
 from datetime import date
 from django.db import models
+from rest_framework.parsers import MultiPartParser, FormParser
+import pandas as pd
+from decimal import Decimal
+from django.contrib.auth import get_user_model
+import os
+from .management.commands.import_excel_data import import_movimentacoes_from_excel
+
+User = get_user_model()
 
 # Create your views here.
 
@@ -40,10 +48,47 @@ class MovimentacaoViewSet(viewsets.ModelViewSet):
     search_fields = ['ativo__ticker', 'operacao']
     ordering_fields = ['data', 'operacao', 'quantidade', 'valorUnitario', 'custoTotal', 'dataCriacao']
     ordering = ['-data', '-dataCriacao']
-    pagination_class = None
 
     def get_queryset(self):
-        return Movimentacao.objects.filter(ativo__usuario=self.request.user)
+        queryset = Movimentacao.objects.filter(ativo__usuario=self.request.user)
+        
+        # Filter by year if provided
+        year = self.request.query_params.get('year')
+        if year:
+            try:
+                year = int(year)
+                queryset = queryset.filter(data__year=year)
+            except ValueError:
+                pass
+        
+        # Filter by ticker if provided
+        ticker = self.request.query_params.get('ticker')
+        if ticker:
+            queryset = queryset.filter(ativo__ticker__icontains=ticker)
+        
+        return queryset
+
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser])
+    def import_excel(self, request):
+        """Import movimentacoes from an uploaded XLSX file."""
+        file_obj = request.FILES.get('file')
+        if not file_obj:
+            return Response({'error': 'No file uploaded.'}, status=400)
+        user = request.user
+        try:
+            # Save uploaded file temporarily
+            temp_path = f'/tmp/{file_obj.name}'
+            with open(temp_path, 'wb+') as temp_file:
+                for chunk in file_obj.chunks():
+                    temp_file.write(chunk)
+            # Use the shared import logic
+            summary = import_movimentacoes_from_excel(temp_path, user)
+            os.remove(temp_path)
+            if summary['errors']:
+                return Response({'message': f"{summary['created_movimentacoes']} movimentações importadas, {len(summary['errors'])} erros.", 'errors': summary['errors']})
+            return Response({'message': f"{summary['created_movimentacoes']} movimentações importadas com sucesso."})
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
 
 class DividendoViewSet(viewsets.ModelViewSet):
     serializer_class = DividendoSerializer
