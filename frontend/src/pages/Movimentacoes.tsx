@@ -210,12 +210,7 @@ export default function Movimentacoes() {
     return pages;
   };
 
-  const handleImportClick = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-      fileInputRef.current.click()
-    }
-  }
+
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -257,7 +252,18 @@ export default function Movimentacoes() {
             Lista de todas as movimentações dos seus ativos
           </p>
         </div>
-        <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
+        <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none space-x-3">
+          <label className="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-green-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-green-600 cursor-pointer">
+            {importing ? 'Importando...' : 'Importar Movimentações (XLSX)'}
+            <input
+              type="file"
+              accept=".xlsx"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+              disabled={importing}
+            />
+          </label>
           <button
             type="button"
             onClick={() => {
@@ -337,23 +343,6 @@ export default function Movimentacoes() {
               Limpar Filtros
             </button>
           </div>
-        </div>
-        <div className="mt-4 flex items-center gap-4">
-          <button
-            type="button"
-            onClick={handleImportClick}
-            className="inline-flex items-center px-4 py-2 border border-primary-600 text-primary-600 rounded-md bg-white hover:bg-primary-50 disabled:opacity-50"
-            disabled={importing}
-          >
-            {importing ? 'Importando...' : 'Importar Movimentações (XLSX)'}
-          </button>
-          <input
-            type="file"
-            accept=".xlsx"
-            ref={fileInputRef}
-            style={{ display: 'none' }}
-            onChange={handleFileChange}
-          />
         </div>
       </div>
 

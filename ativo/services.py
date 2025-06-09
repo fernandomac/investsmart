@@ -4,6 +4,8 @@ from decimal import Decimal
 from django.db import transaction
 from .models import Ativo, EvolucaoPatrimonial, Movimentacao, Dividendo
 from .price_service import get_current_price
+import pandas as pd
+import os
 
 def calculate_monthly_dividends(ativo: Ativo, snapshot_date: date) -> Decimal:
     """Calculate total dividends for an asset in a specific month."""
@@ -159,4 +161,72 @@ def create_snapshots_for_all_assets(snapshot_date: date = None, user = None):
             else:
                 print(f"Skipping snapshot for {ativo.ticker} - quantidade <= 0")
         except Exception as e:
-            print(f"Error creating monthly snapshot for {ativo.ticker}: {str(e)}") 
+            print(f"Error creating monthly snapshot for {ativo.ticker}: {str(e)}")
+
+def import_dividendos_from_excel(file_path, user, stdout=None):
+    """
+    Import dividendos from an Excel file for a specific user.
+    Returns a summary dict.
+    """
+    summary = {
+        'created_dividendos': 0,
+        'errors': [],
+    }
+    
+    try:
+        df = pd.read_excel(file_path)
+        
+        with transaction.atomic():
+            for idx, row in df.iterrows():
+                try:
+                    # Extract ticker from 'Produto' column (format: "BBAS3 - BANCO DO BRASIL S/A")
+                    produto = str(row['Produto']).strip()
+                    ticker = produto.split(' - ')[0].strip() if ' - ' in produto else produto.strip()
+                    
+                    # Handle ticker normalization (remove 'F' suffix if present)
+                    if ticker.endswith('F') and len(ticker) > 1:
+                        ticker = ticker[:-1]
+                    
+                    # Parse date from 'Pagamento' column
+                    data_pagamento = pd.to_datetime(row['Pagamento'], format='%d/%m/%Y').date()
+                    
+                    # Parse valor from 'Valor líquido' column
+                    valor_liquido = str(row['Valor líquido']).replace(',', '.')
+                    valor = Decimal(valor_liquido)
+                    
+                    # Find the ativo for this user
+                    try:
+                        ativo = Ativo.objects.get(ticker=ticker, usuario=user)
+                    except Ativo.DoesNotExist:
+                        summary['errors'].append(f'Row {idx + 1}: Ativo {ticker} não encontrado para o usuário')
+                        if stdout:
+                            stdout.write(f'Error: Ativo {ticker} not found for user')
+                        continue
+                    
+                    # Create dividendo
+                    dividendo, created = Dividendo.objects.get_or_create(
+                        ativo=ativo,
+                        data=data_pagamento,
+                        valor=valor
+                    )
+                    
+                    if created:
+                        summary['created_dividendos'] += 1
+                        if stdout:
+                            stdout.write(f'Created dividendo: {ticker} - {data_pagamento} - {valor}')
+                    else:
+                        if stdout:
+                            stdout.write(f'Dividendo already exists: {ticker} - {data_pagamento} - {valor}')
+                    
+                except Exception as e:
+                    summary['errors'].append(f'Row {idx + 1}: {str(e)}')
+                    if stdout:
+                        stdout.write(f'Error processing row {idx + 1}: {str(e)}')
+                    continue
+    
+    except Exception as e:
+        summary['errors'].append(str(e))
+        if stdout:
+            stdout.write(f'Error reading file: {str(e)}')
+    
+    return summary 

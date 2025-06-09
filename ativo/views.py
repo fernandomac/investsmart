@@ -14,6 +14,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 import os
 from .management.commands.import_excel_data import import_movimentacoes_from_excel
+from .services import import_dividendos_from_excel
 
 User = get_user_model()
 
@@ -96,10 +97,56 @@ class DividendoViewSet(viewsets.ModelViewSet):
     search_fields = ['ativo__ticker']
     ordering_fields = ['data', 'valor', 'dataCriacao']
     ordering = ['-data', '-dataCriacao']
-    pagination_class = None
 
     def get_queryset(self):
-        return Dividendo.objects.filter(ativo__usuario=self.request.user)
+        queryset = Dividendo.objects.filter(ativo__usuario=self.request.user)
+        
+        # Filter by year if provided
+        year = self.request.query_params.get('year')
+        if year:
+            try:
+                year = int(year)
+                queryset = queryset.filter(data__year=year)
+            except ValueError:
+                pass
+        
+        # Filter by ticker if provided
+        ticker = self.request.query_params.get('ticker')
+        if ticker:
+            queryset = queryset.filter(ativo__ticker__icontains=ticker)
+        
+        return queryset
+
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser])
+    def import_excel(self, request):
+        """Import dividendos from an uploaded XLSX file."""
+        file_obj = request.FILES.get('file')
+        if not file_obj:
+            return Response({'error': 'No file uploaded.'}, status=400)
+        
+        user = request.user
+        try:
+            # Save uploaded file temporarily
+            temp_path = f'/tmp/{file_obj.name}'
+            with open(temp_path, 'wb+') as temp_file:
+                for chunk in file_obj.chunks():
+                    temp_file.write(chunk)
+            
+            # Use the import logic from services
+            summary = import_dividendos_from_excel(temp_path, user)
+            os.remove(temp_path)
+            
+            if summary['errors']:
+                return Response({
+                    'message': f"{summary['created_dividendos']} dividendos importados, {len(summary['errors'])} erros.",
+                    'errors': summary['errors']
+                })
+            
+            return Response({
+                'message': f"{summary['created_dividendos']} dividendos importados com sucesso."
+            })
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
 
 class EvolucaoPatrimonialViewSet(viewsets.ModelViewSet):
     queryset = EvolucaoPatrimonial.objects.all()

@@ -326,7 +326,6 @@ export default function Dashboard() {
   }
 
   const sumario = calcularSumario()
-  console.log('DASHBOARD sumario:', sumario)
   // Only include ativos with quantidade > 0 in the charts
   const sumarioWithPositiveQuantity = sumario.filter(item => item.quantidade > 0)
   const sumarioCategorias = calcularSumarioPorCategoria(sumarioWithPositiveQuantity)

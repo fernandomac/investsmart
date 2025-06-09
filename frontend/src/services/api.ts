@@ -163,4 +163,33 @@ export const movimentacaoService = {
   delete: (id: number) => api.delete(`/movimentacoes/${id}/`),
 };
 
+export type Dividendo = {
+  id: number;
+  ativo: number;
+  ativo_display: string;
+  data: string;
+  valor: number;
+  dataCriacao: string;
+  dataAlteracao: string;
+};
+
+export const dividendoService = {
+  getAll: (page?: number, pageSize?: number, year?: number, ticker?: string) => {
+    const params = new URLSearchParams();
+    if (page) params.append('page', page.toString());
+    if (pageSize) params.append('page_size', pageSize.toString());
+    if (year) params.append('year', year.toString());
+    if (ticker) params.append('ticker', ticker);
+    
+    const queryString = params.toString();
+    const url = queryString ? `/dividendos/?${queryString}` : '/dividendos/';
+    
+    return api.get<PaginatedResponse<Dividendo>>(url);
+  },
+  getById: (id: number) => api.get<Dividendo>(`/dividendos/${id}/`),
+  create: (data: any) => api.post<Dividendo>('/dividendos/', data),
+  update: (id: number, data: any) => api.put<Dividendo>(`/dividendos/${id}/`, data),
+  delete: (id: number) => api.delete(`/dividendos/${id}/`),
+};
+
 export default api; 
