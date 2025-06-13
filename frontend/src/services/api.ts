@@ -93,6 +93,8 @@ export type Ativo = {
   peso: number;
   dataVencimento: string | null;
   anotacao: string;
+  icone_url: string | null;
+  icone_url_display: string;
   dataCriacao: string;
   dataAtualizacao: string;
 }

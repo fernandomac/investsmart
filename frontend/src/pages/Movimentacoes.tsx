@@ -507,11 +507,25 @@ export default function Movimentacoes() {
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {Array.isArray(movimentacoes) && movimentacoes.length > 0 ? (
-                    movimentacoes.map((movimentacao) => (
-                      <tr key={movimentacao.id}>
-                        <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-primary-600 sm:pl-6">
-                          {movimentacao.ativo_display}
-                        </td>
+                    movimentacoes.map((movimentacao) => {
+                      const ativo = ativos.find(a => a.id === movimentacao.ativo);
+                      return (
+                        <tr key={movimentacao.id}>
+                          <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-primary-600 sm:pl-6">
+                            <div className="flex items-center">
+                              {ativo && (
+                                <img 
+                                  src={ativo.icone_url_display} 
+                                  alt={`${ativo.ticker} icon`}
+                                  className="h-6 w-6 rounded-full mr-2 object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.src = 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png';
+                                  }}
+                                />
+                              )}
+                              <span>{movimentacao.ativo_display}</span>
+                            </div>
+                          </td>
                         <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                           {format(new Date(movimentacao.data), 'dd/MM/yyyy')}
                         </td>
@@ -545,7 +559,8 @@ export default function Movimentacoes() {
                           </button>
                         </td>
                       </tr>
-                    ))
+                      );
+                    })
                   ) : (
                     <tr>
                       <td colSpan={8} className="py-4 text-center text-sm text-gray-500">

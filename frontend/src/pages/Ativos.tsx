@@ -422,7 +422,7 @@ function Ativos() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">
-                      Ticker
+                      Ativo
                     </th>
                     <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
                       Nome
@@ -450,7 +450,18 @@ function Ativos() {
                       {filteredAtivos.map((ativo) => (
                         <tr key={ativo.id}>
                           <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-primary-600 sm:pl-6">
-                            {ativo.ticker}
+                            <div className="flex items-center">
+                              <img 
+                                src={ativo.icone_url_display} 
+                                alt={`${ativo.ticker} icon`}
+                                className="h-8 w-8 rounded-full mr-3 object-cover"
+                                onError={(e) => {
+                                  // Fallback to a default icon if image fails to load
+                                  e.currentTarget.src = 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png';
+                                }}
+                              />
+                              <span>{ativo.ticker}</span>
+                            </div>
                           </td>
                           <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                             {ativo.nome}

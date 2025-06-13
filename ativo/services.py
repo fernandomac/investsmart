@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.db import transaction
 from .models import Ativo, EvolucaoPatrimonial, Movimentacao, Dividendo
 from .price_service import get_current_price
+from .icon_service import fetch_ativo_icon
 import pandas as pd
 import os
 

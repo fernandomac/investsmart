@@ -72,6 +72,7 @@ class Ativo(models.Model):
     peso = models.DecimalField(max_digits=5, decimal_places=2, default=0, help_text='Porcentagem desejada do total (0-100)')
     dataVencimento = models.DateField(null=True, blank=True, help_text='Data de vencimento para investimentos de renda fixa')
     anotacao = models.TextField(blank=True, help_text='Anotações gerais sobre o ativo')
+    icone_url = models.URLField(blank=True, null=True, help_text='URL do ícone do ativo')
     dataCriacao = models.DateTimeField(auto_now_add=True)
     dataAlteracao = models.DateTimeField(auto_now=True)
 
@@ -82,6 +83,45 @@ class Ativo(models.Model):
 
     def __str__(self):
         return f"{self.ticker} - {self.nome}"
+    
+    def get_icon_url(self):
+        """Get icon URL with fallback to category default"""
+        if self.icone_url:
+            return self.icone_url
+        
+        # Default icons based on category
+        category_icons = {
+            # Renda Variável
+            'ACOES': 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png',  # Stock chart
+            'FII': 'https://cdn-icons-png.flaticon.com/512/1077/1077976.png',   # Building
+            'ETFS': 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png',  # Stock chart
+            'BDRS': 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png',  # Stock chart
+            'CRIPTO': 'https://cdn-icons-png.flaticon.com/512/5968/5968260.png', # Bitcoin
+            
+            # Renda Fixa
+            'TESOURO_DIRETO': 'https://cdn-icons-png.flaticon.com/512/1077/1077114.png', # Government
+            'CDB': 'https://cdn-icons-png.flaticon.com/512/1077/1077976.png',    # Bank
+            'LCI_LCA': 'https://cdn-icons-png.flaticon.com/512/1077/1077976.png', # Bank
+            'DEBENTURES': 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png', # Chart
+            'CRI_CRA': 'https://cdn-icons-png.flaticon.com/512/1077/1077976.png', # Building
+            'POUPANCA': 'https://cdn-icons-png.flaticon.com/512/1077/1077976.png', # Bank
+            
+            # Fundos
+            'FUNDO_RF': 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png', # Chart
+            'FUNDO_MULTI': 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png', # Chart
+            'FUNDO_ACOES': 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png', # Chart
+            'FUNDO_CAMBIAL': 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png', # Chart
+            'FUNDO_IMOB': 'https://cdn-icons-png.flaticon.com/512/1077/1077976.png', # Building
+            'PREVIDENCIA': 'https://cdn-icons-png.flaticon.com/512/1077/1077114.png', # Shield
+            
+            # Exterior
+            'ETF_INTER': 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png', # Chart
+            'ACOES_INTER': 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png', # Chart
+            'FUNDOS_INTER': 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png', # Chart
+            'REITS': 'https://cdn-icons-png.flaticon.com/512/1077/1077976.png', # Building
+        }
+        
+        return category_icons.get(self.categoria.subtipo, 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png')
 
 class Movimentacao(models.Model):
     OPERACAO_CHOICES = [

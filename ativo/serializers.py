@@ -9,16 +9,21 @@ class CategoriaSerializer(serializers.ModelSerializer):
 
 class AtivoSerializer(serializers.ModelSerializer):
     categoria_display = serializers.SerializerMethodField()
+    icone_url_display = serializers.SerializerMethodField()
     usuario = serializers.HiddenField(default=serializers.CurrentUserDefault())
 
     class Meta:
         model = Ativo
         fields = ['id', 'ticker', 'nome', 'moeda', 'categoria', 'categoria_display', 'usuario', 
-                 'peso', 'dataVencimento', 'anotacao', 'dataCriacao', 'dataAlteracao']
+                 'peso', 'dataVencimento', 'anotacao', 'icone_url', 'icone_url_display', 
+                 'dataCriacao', 'dataAlteracao']
         read_only_fields = ['dataCriacao', 'dataAlteracao']
 
     def get_categoria_display(self, obj):
         return str(obj.categoria)
+    
+    def get_icone_url_display(self, obj):
+        return obj.get_icon_url()
 
     def validate_peso(self, value):
         """

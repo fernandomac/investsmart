@@ -2,6 +2,7 @@ from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from ativo.models import Ativo, Movimentacao, Categoria
+from ativo.icon_service import fetch_ativo_icon
 import pandas as pd
 from datetime import datetime
 from decimal import Decimal
@@ -55,6 +56,16 @@ def import_movimentacoes_from_excel(file_path, user, stdout=None):
                         }
                     )
                     if ativo_created:
+                        # Fetch and set icon for new ativo
+                        try:
+                            icon_url = fetch_ativo_icon(ticker, company_name, category.subtipo)
+                            ativo.icone_url = icon_url
+                            ativo.save()
+                            if stdout:
+                                stdout.write(f'  Set icon for {ticker}: {icon_url}')
+                        except Exception as e:
+                            if stdout:
+                                stdout.write(f'  Warning: Could not fetch icon for {ticker}: {str(e)}')
                         summary['created_ativos'] += 1
                     Movimentacao.objects.create(
                         ativo=ativo,
