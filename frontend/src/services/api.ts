@@ -91,10 +91,17 @@ export type Ativo = {
   categoria: number;
   categoria_display: string;
   peso: number;
+  quantidade: number;
+  preco_medio: number;
   dataVencimento: string | null;
   anotacao: string;
+  icone_url: string | null;
+  icone_url_display: string;
   dataCriacao: string;
   dataAtualizacao: string;
+  total_investido: number;
+  valor_atual: number;
+  rendimento: number;
 }
 
 type PaginatedResponse<T> = {

@@ -2,6 +2,19 @@ import { useEffect, useState, useCallback } from 'react'
 import type { Ativo, Categoria } from '../services/api'
 import { ativoService, categoriaService } from '../services/api'
 import { format } from 'date-fns'
+import { Tooltip } from '@mui/material'
+import { Table, TableHead, TableBody, TableRow, TableCell } from '@mui/material'
+import { IconButton } from '@mui/material'
+import EditIcon from '@mui/icons-material/Edit'
+import DeleteIcon from '@mui/icons-material/Delete'
+import WarningIcon from '@mui/icons-material/Warning'
+
+const formatCurrency = (value: number, currency: string = 'BRL') => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: currency
+  }).format(value);
+};
 
 function Ativos() {
   const [ativos, setAtivos] = useState<Ativo[]>([])
@@ -10,6 +23,7 @@ function Ativos() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingAtivo, setEditingAtivo] = useState<Ativo | null>(null)
+  const [priceFetchError, setPriceFetchError] = useState<{[key: string]: boolean}>({})
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -200,6 +214,49 @@ function Ativos() {
     }
     return pages;
   };
+
+  const calculateTotalInvestido = (ativo: Ativo) => {
+    return ativo.quantidade * ativo.preco_medio
+  }
+
+  const calculateRendimento = (ativo: Ativo) => {
+    const totalInvestido = calculateTotalInvestido(ativo)
+    return ativo.valor_atual - totalInvestido
+  }
+
+  const calculateRendimentoPercentual = (ativo: Ativo) => {
+    const totalInvestido = calculateTotalInvestido(ativo)
+    if (totalInvestido === 0) return 0
+    return ((ativo.valor_atual - totalInvestido) / totalInvestido) * 100
+  }
+
+  const getValorAtualDisplay = (ativo: Ativo) => {
+    if (ativo.is_preco_estimado) {
+      return (
+        <Tooltip title="Valor estimado - não foi possível obter o preço atual">
+          <span style={{ color: '#ffa726' }}>
+            {formatCurrency(ativo.valor_atual, ativo.moeda)} *
+          </span>
+        </Tooltip>
+      );
+    }
+    return formatCurrency(ativo.valor_atual, ativo.moeda);
+  }
+
+  const getRendimentoDisplay = (ativo: Ativo) => {
+    const rendimento = calculateRendimento(ativo)
+    const rendimentoPercentual = calculateRendimentoPercentual(ativo)
+    const color = rendimento >= 0 ? '#4caf50' : '#f44336'
+    
+    return (
+      <div>
+        <div style={{ color }}>{formatCurrency(rendimento, ativo.moeda)}</div>
+        <div style={{ color, fontSize: '0.8em' }}>
+          ({rendimentoPercentual.toFixed(2)}%)
+        </div>
+      </div>
+    )
+  }
 
   if (loading) {
     return (
@@ -418,93 +475,74 @@ function Ativos() {
         <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
           <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
             <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
-              <table className="min-w-full divide-y divide-gray-300">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">
-                      Ticker
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Nome
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Categoria
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Moeda
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
-                      Peso ({currencyFilter}) (%)
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Vencimento
-                    </th>
-                    <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                      <span className="sr-only">Ações</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
-                  {filteredAtivos.length > 0 ? (
-                    <>
-                      {filteredAtivos.map((ativo) => (
-                        <tr key={ativo.id}>
-                          <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-primary-600 sm:pl-6">
-                            {ativo.ticker}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                            {ativo.nome}
-                            {ativo.anotacao && (
-                              <p className="text-xs text-gray-400 mt-1">{ativo.anotacao}</p>
-                            )}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                            {ativo.categoria_display || '-'}
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">{ativo.moeda}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
-                            {Number(ativo.peso || 0).toFixed(2)}%
-                          </td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                            {ativo.dataVencimento ? format(new Date(ativo.dataVencimento), 'dd/MM/yyyy') : '-'}
-                          </td>
-                          <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                            <button
-                              type="button"
-                              onClick={() => handleEdit(ativo)}
-                              className="text-primary-600 hover:text-primary-900"
-                            >
-                              Editar
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                      <tr className="bg-gray-50">
-                        <td colSpan={4} className="py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6">
-                          Total ({currencyFilter})
-                        </td>
-                        <td className={`whitespace-nowrap px-3 py-4 text-sm text-right font-medium ${getPesoStatusColor(totalPeso)}`}>
-                          {totalPeso.toFixed(2)}%
-                          {totalPeso !== 100 && (
-                            <p className="text-xs mt-1">
-                              {totalPeso < 100 
-                                ? `Faltam ${(100 - totalPeso).toFixed(2)}%`
-                                : `Excesso de ${(totalPeso - 100).toFixed(2)}%`}
-                            </p>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Ticker</TableCell>
+                    <TableCell>Categoria</TableCell>
+                    <TableCell>Quantidade</TableCell>
+                    <TableCell>Preço Médio</TableCell>
+                    <TableCell>Total Investido</TableCell>
+                    <TableCell>Valor Atual</TableCell>
+                    <TableCell>Rendimento</TableCell>
+                    <TableCell>Peso (%)</TableCell>
+                    <TableCell>Ações</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredAtivos.map((ativo) => (
+                    <TableRow key={ativo.id}>
+                      <TableCell>
+                        <div>
+                          <div style={{ fontWeight: 'bold' }}>{ativo.ticker}</div>
+                          {ativo.nome && (
+                            <div style={{ fontSize: '0.8em', color: 'gray' }}>{ativo.nome}</div>
                           )}
-                        </td>
-                        <td colSpan={2}></td>
-                      </tr>
-                    </>
-                  ) : (
-                    <tr>
-                      <td colSpan={7} className="text-center py-4 text-sm text-gray-500">
-                        Nenhum ativo encontrado para {getCurrencyDisplayName(currencyFilter)}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                          {ativo.dataVencimento && (
+                            <div style={{ fontSize: '0.8em', color: 'gray' }}>
+                              {format(new Date(ativo.dataVencimento), 'dd/MM/yyyy')}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>{ativo.categoria_display || '-'}</TableCell>
+                      <TableCell>{ativo.quantidade.toLocaleString('pt-BR', { minimumFractionDigits: 6 })}</TableCell>
+                      <TableCell>{formatCurrency(ativo.preco_medio)}</TableCell>
+                      <TableCell>{formatCurrency(calculateTotalInvestido(ativo))}</TableCell>
+                      <TableCell>
+                        <div>
+                          {formatCurrency(ativo.valor_atual)}
+                          {ativo.is_preco_estimado && (
+                            <Tooltip title="Preço estimado">
+                              <WarningIcon color="warning" fontSize="small" style={{ marginLeft: 4 }} />
+                            </Tooltip>
+                          )}
+                          <div style={{ fontSize: '0.75rem', color: 'gray', marginTop: 2 }}>
+                            {formatCurrency(ativo.preco_atual)}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <span style={{ color: ativo.rendimento >= 0 ? 'green' : 'red' }}>
+                            {getRendimentoDisplay(ativo)}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div style={{ color: getPesoStatusColor(Number(ativo.peso || 0)) }}>
+                          {Number(ativo.peso || 0).toFixed(2)}%
+                        </div>
+                      </TableCell>
+                      <TableCell align="right">
+                        <IconButton onClick={() => handleEdit(ativo)}>
+                          <EditIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           </div>
         </div>

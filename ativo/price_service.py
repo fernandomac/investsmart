@@ -1,55 +1,55 @@
-import yfinance as yf
 from decimal import Decimal
-from .models import Ativo, Movimentacao
+import yfinance as yf
+from django.utils import timezone
+import logging
+from typing import Tuple
 
-def get_current_price(ativo: Ativo) -> Decimal:
+logger = logging.getLogger(__name__)
+
+def get_current_price(ticker: str, moeda: str = 'BRL') -> Tuple[Decimal, bool]:
     """
-    Fetch current price for a given asset.
-    For variable income assets (stocks, ETFs, BDRs, etc), fetches from yfinance.
-    For fixed income assets, returns the average cost per unit.
+    Get current price for a ticker, using cache if available.
+    Returns (price, is_estimado) tuple.
     """
+    from .models import PrecoCache  # Import here to avoid circular import
+
+    # Try to get from cache first
+    cached_price, is_estimado = PrecoCache.get_cached_price(ticker, moeda)
+    if cached_price is not None:
+        return cached_price, is_estimado
+
     try:
-        # For fixed income assets, calculate the average cost per unit
-        if ativo.categoria.tipo == 'RENDA_FIXA':
-            movimentacoes = Movimentacao.objects.filter(ativo=ativo)
-            total_custo = Decimal('0.00')
-            total_quantidade = Decimal('0.00')
-            
-            for mov in movimentacoes:
-                if mov.operacao == 'COMPRA':
-                    total_custo += mov.custoTotal
-                    total_quantidade += mov.quantidade
-                elif mov.operacao == 'VENDA':
-                    total_custo -= mov.custoTotal
-                    total_quantidade -= mov.quantidade
-            
-            # Return the average cost per unit, or 0 if no quantity
-            if total_quantidade > 0:
-                return (total_custo / total_quantidade).quantize(Decimal('0.01'))
-            return Decimal('0.00')
-        
-        # For variable income assets, fetch from yfinance
-        yahoo_ticker = ativo.ticker
-        if ativo.moeda == 'BRL':
-            # Brazilian stocks on B3
-            yahoo_ticker = f"{ativo.ticker}.SA"
-        elif ativo.moeda == 'GBP':
-            # London Stock Exchange
-            yahoo_ticker = f"{ativo.ticker}.L"
-        
-        stock = yf.Ticker(yahoo_ticker)
-        current_price = stock.info.get('regularMarketPrice')
-        
-        if current_price is None:
-            # Try without suffix as fallback
-            if yahoo_ticker != ativo.ticker:
-                stock = yf.Ticker(ativo.ticker)
-                current_price = stock.info.get('regularMarketPrice')
-            
-            if current_price is None:
-                raise ValueError(f"Could not fetch price for {yahoo_ticker} or {ativo.ticker}")
-                
-        return Decimal(str(current_price))
+        # If not in cache or expired, fetch from yfinance
+        stock = yf.Ticker(ticker)
+        info = stock.info
+
+        # Get price based on currency
+        if moeda == 'BRL':
+            price = info.get('regularMarketPrice') or info.get('currentPrice')
+        else:
+            # For other currencies, try to get the price in that currency
+            price = info.get(f'regularMarketPrice_{moeda}') or info.get(f'currentPrice_{moeda}')
+
+        if price is None:
+            # If price not found in the desired currency, try to convert from USD
+            usd_price = info.get('regularMarketPrice') or info.get('currentPrice')
+            if usd_price is not None:
+                # TODO: Implement currency conversion
+                # For now, just use USD price and mark as estimated
+                price = usd_price
+                is_estimado = True
+            else:
+                raise ValueError(f"Could not find price for {ticker}")
+
+        # Convert to Decimal and update cache
+        price_decimal = Decimal(str(price))
+        PrecoCache.update_cache(ticker, moeda, price_decimal, is_estimado)
+        return price_decimal, is_estimado
+
     except Exception as e:
-        print(f"Error fetching price for {ativo.ticker}: {str(e)}")
-        return Decimal('0.00') 
+        logger.error(f"Error fetching price for {ticker}: {str(e)}")
+        # If there's an error, try to get the last known price from cache
+        cached_price, is_estimado = PrecoCache.get_cached_price(ticker, moeda)
+        if cached_price is not None:
+            return cached_price, True  # Mark as estimated since we're using old data
+        raise 

@@ -395,33 +395,48 @@ export default function Dividendos() {
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {Array.isArray(dividendos) && dividendos.length > 0 ? (
-                    dividendos.map((dividendo) => (
-                      <tr key={dividendo.id}>
-                        <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-primary-600 sm:pl-6">
-                          {dividendo.ativo_display}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                          {format(new Date(dividendo.data), 'dd/MM/yyyy')}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
-                          {formatCurrency(dividendo.valor, dividendo.ativo)}
-                        </td>
-                        <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                          <button
-                            onClick={() => handleEdit(dividendo)}
-                            className="text-primary-600 hover:text-primary-900 bg-transparent mr-4"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            onClick={() => dividendo.id && handleDelete(dividendo.id)}
-                            className="text-red-600 hover:text-red-900 bg-transparent"
-                          >
-                            Excluir
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                    dividendos.map((dividendo) => {
+                      const ativo = ativos.find(a => a.id === dividendo.ativo);
+                      return (
+                        <tr key={dividendo.id}>
+                          <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-primary-600 sm:pl-6">
+                            <div className="flex items-center">
+                              {ativo && (
+                                <img 
+                                  src={ativo.icone_url_display} 
+                                  alt={`${ativo.ticker} icon`}
+                                  className="h-6 w-6 rounded-full mr-2 object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.src = 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png';
+                                  }}
+                                />
+                              )}
+                              <span>{dividendo.ativo_display}</span>
+                            </div>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                            {format(new Date(dividendo.data), 'dd/MM/yyyy')}
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
+                            {formatCurrency(dividendo.valor, dividendo.ativo)}
+                          </td>
+                          <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
+                            <button
+                              onClick={() => handleEdit(dividendo)}
+                              className="text-primary-600 hover:text-primary-900 bg-transparent mr-4"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              onClick={() => dividendo.id && handleDelete(dividendo.id)}
+                              className="text-red-600 hover:text-red-900 bg-transparent"
+                            >
+                              Excluir
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   ) : (
                     <tr>
                       <td colSpan={4} className="py-4 text-center text-sm text-gray-500">

@@ -1,11 +1,22 @@
 import yfinance as yf
-from datetime import date
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from django.db import transaction
-from .models import Ativo, EvolucaoPatrimonial, Movimentacao, Dividendo
-from .price_service import get_current_price
+from .models import Ativo, EvolucaoPatrimonial, Movimentacao, Dividendo, Snapshot, PrecoCache
+from .icon_service import fetch_ativo_icon
 import pandas as pd
 import os
+from django.utils import timezone
+import logging
+from typing import Tuple, Optional, List, Dict, Any
+import requests
+from django.db.models import Sum, F, ExpressionWrapper, FloatField, Case, When, Value
+from django.db.models.functions import Coalesce
+from .types import PrecoInfo, AtivoInfo
+from django.db.utils import OperationalError
+import time
+
+logger = logging.getLogger(__name__)
 
 def calculate_monthly_dividends(ativo: Ativo, snapshot_date: date) -> Decimal:
     """Calculate total dividends for an asset in a specific month."""
@@ -77,91 +88,31 @@ def calculate_current_cost(ativo: Ativo) -> Decimal:
     
     return max(total_cost, Decimal('0.00'))  # Ensure non-negative
 
-@transaction.atomic
-def create_snapshot(ativo: Ativo, snapshot_date: date = None) -> EvolucaoPatrimonial:
-    """Create a monthly snapshot of the current asset value (always first day of month)."""
-    if snapshot_date is None:
-        snapshot_date = date.today()
-    
-    # Convert to first day of the month for monthly snapshots
-    monthly_date = snapshot_date.replace(day=1)
-        
+def create_snapshot(ativo: Ativo) -> Snapshot:
+    """Create a snapshot of the current state of an asset"""
     try:
-        # Get current price
-        current_price = get_current_price(ativo)
-        print(f"Fetched price for {ativo.ticker}: {current_price}")
-        
-        # Get current quantity
-        quantidade = calculate_current_quantity(ativo)
-        print(f"Calculated quantity for {ativo.ticker}: {quantidade}")
-        
-        # Only create snapshot if quantidade > 0
-        if quantidade <= 0:
-            print(f"Skipping monthly snapshot for {ativo.ticker} - quantidade <= 0")
-            return None
-        
-        # Calculate total cost
-        custo_total = calculate_current_cost(ativo)
-        print(f"Calculated cost for {ativo.ticker}: {custo_total}")
-        
-        # Calculate monthly dividends
-        dividendos_mes = calculate_monthly_dividends(ativo, monthly_date)
-        print(f"Calculated monthly dividends for {ativo.ticker}: {dividendos_mes}")
-        
-        # Calculate total value
-        valor_total = current_price * quantidade
-        print(f"Will create monthly snapshot for {ativo.ticker} ({monthly_date.strftime('%m/%Y')}) with price={current_price}, quantidade={quantidade}, valor_total={valor_total}, dividendos={dividendos_mes}")
-        
-        # Create or update monthly snapshot (using first day of month)
-        snapshot, created = EvolucaoPatrimonial.objects.update_or_create(
+        current_price, is_estimated = ativo.get_current_price()
+        snapshot = Snapshot.objects.create(
             ativo=ativo,
-            data=monthly_date,
-            defaults={
-                'preco_atual': current_price.quantize(Decimal('0.01')),
-                'quantidade': quantidade.quantize(Decimal('0.000001')),
-                'valor_total': valor_total.quantize(Decimal('0.01')),
-                'custo_total': custo_total,
-                'dividendos_mes': dividendos_mes
-            }
+            data=timezone.now().date(),
+            preco=current_price,
+            quantidade=ativo.quantidade,
+            valor_total=ativo.valor_atual,
+            is_preco_estimado=is_estimated
         )
-        
-        if created:
-            print(f"Created new monthly snapshot for {ativo.ticker} ({monthly_date.strftime('%m/%Y')}) with ID {snapshot.id}")
-        else:
-            print(f"Updated monthly snapshot for {ativo.ticker} ({monthly_date.strftime('%m/%Y')}) with ID {snapshot.id}")
-        
-        # Verify the save
-        snapshot.refresh_from_db()
-        print(f"Verified snapshot: price={snapshot.preco_atual}, quantidade={snapshot.quantidade}, total={snapshot.valor_total}, dividendos={snapshot.dividendos_mes}")
-        
         return snapshot
     except Exception as e:
-        print(f"Error creating monthly snapshot for {ativo.ticker}: {str(e)}")
+        logger.error(f"Error creating snapshot for {ativo.ticker}: {str(e)}")
         raise
 
-def create_snapshots_for_all_assets(snapshot_date: date = None, user = None):
-    """Create monthly snapshots for all active assets with quantidade > 0."""
-    if snapshot_date is None:
-        snapshot_date = date.today()
-    
-    # Convert to first day of the month
-    monthly_date = snapshot_date.replace(day=1)
-    
-    queryset = Ativo.objects.all()
-    if user is not None:
-        queryset = queryset.filter(usuario=user)
-    
-    print(f"Creating monthly snapshots for {monthly_date.strftime('%m/%Y')}")
-        
-    for ativo in queryset:
+def create_snapshots_for_all_assets():
+    """Create snapshots for all assets"""
+    for ativo in Ativo.objects.all():
         try:
-            quantidade = calculate_current_quantity(ativo)
-            if quantidade > 0:
-                create_snapshot(ativo, snapshot_date)
-            else:
-                print(f"Skipping snapshot for {ativo.ticker} - quantidade <= 0")
+            create_snapshot(ativo)
         except Exception as e:
-            print(f"Error creating monthly snapshot for {ativo.ticker}: {str(e)}")
+            logger.error(f"Error creating snapshot for {ativo.ticker}: {str(e)}")
+            continue
 
 def import_dividendos_from_excel(file_path, user, stdout=None):
     """
@@ -229,4 +180,58 @@ def import_dividendos_from_excel(file_path, user, stdout=None):
         if stdout:
             stdout.write(f'Error reading file: {str(e)}')
     
-    return summary 
+    return summary
+
+def get_current_price(ticker: str, moeda: str = 'BRL') -> Tuple[Decimal, bool]:
+    """Obtém o preço atual de um ativo."""
+    try:
+        # Tenta obter do cache primeiro
+        cache = PrecoCache.objects.filter(
+            ticker=ticker,
+            moeda=moeda,
+            data_atualizacao__gte=timezone.now() - timedelta(minutes=60)
+        ).first()
+        
+        if cache:
+            return cache.preco, cache.is_estimado
+            
+        # Se não estiver em cache, busca do Yahoo Finance
+        if moeda == 'BRL':
+            ticker = f"{ticker}.SA"
+            
+        stock = yf.Ticker(ticker)
+        info = stock.info
+        
+        if not info or 'regularMarketPrice' not in info:
+            return Decimal('0'), True  # Preço estimado se não conseguir obter
+            
+        preco = Decimal(str(info['regularMarketPrice']))
+        
+        # Tenta atualizar o cache com retries
+        max_retries = 3
+        retry_delay = 0.1  # 100ms
+        
+        for attempt in range(max_retries):
+            try:
+                with transaction.atomic():
+                    PrecoCache.objects.update_or_create(
+                        ticker=ticker.replace('.SA', ''),
+                        moeda=moeda,
+                        defaults={
+                            'preco': preco,
+                            'is_estimado': False  # Preço real do Yahoo Finance
+                        }
+                    )
+                break
+            except OperationalError as e:
+                if attempt == max_retries - 1:  # Last attempt
+                    print(f"Erro ao atualizar cache para {ticker} após {max_retries} tentativas: {str(e)}")
+                    return preco, False  # Return the price anyway, even if cache update failed
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+        
+        return preco, False  # Preço real do Yahoo Finance
+        
+    except Exception as e:
+        print(f"Erro ao obter preço de {ticker}: {str(e)}")
+        return Decimal('0'), True  # Preço estimado em caso de erro 

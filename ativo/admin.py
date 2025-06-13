@@ -11,10 +11,26 @@ class CategoriaAdmin(admin.ModelAdmin):
 
 @admin.register(Ativo)
 class AtivoAdmin(admin.ModelAdmin):
-    list_display = ['ticker', 'nome', 'moeda', 'categoria', 'peso', 'dataVencimento', 'usuario', 'dataCriacao', 'dataAlteracao']
+    list_display = ['ticker', 'nome', 'moeda', 'categoria', 'peso', 'quantidade', 'preco_medio', 'dataVencimento', 'usuario', 'dataCriacao', 'dataAlteracao']
     list_filter = ['moeda', 'categoria', 'usuario', 'dataVencimento']
     search_fields = ['ticker', 'nome', 'anotacao']
     ordering = ['ticker']
+    readonly_fields = ['quantidade', 'preco_medio', 'dataCriacao', 'dataAlteracao']
+    fieldsets = (
+        ('Informações Básicas', {
+            'fields': ('ticker', 'nome', 'moeda', 'categoria', 'usuario')
+        }),
+        ('Investimento', {
+            'fields': ('peso', 'quantidade', 'preco_medio', 'dataVencimento')
+        }),
+        ('Detalhes', {
+            'fields': ('anotacao', 'icone_url')
+        }),
+        ('Informações do Sistema', {
+            'fields': ('dataCriacao', 'dataAlteracao'),
+            'classes': ('collapse',)
+        }),
+    )
 
 @admin.register(Movimentacao)
 class MovimentacaoAdmin(admin.ModelAdmin):
@@ -23,6 +39,18 @@ class MovimentacaoAdmin(admin.ModelAdmin):
     search_fields = ['ativo__ticker', 'ativo__nome']
     ordering = ['-data', '-dataCriacao']
     readonly_fields = ['custoTotal', 'dataCriacao', 'dataAlteracao']
+    fieldsets = (
+        ('Informações Básicas', {
+            'fields': ('ativo', 'data', 'operacao')
+        }),
+        ('Valores', {
+            'fields': ('quantidade', 'valorUnitario', 'taxa', 'custoTotal')
+        }),
+        ('Informações do Sistema', {
+            'fields': ('dataCriacao', 'dataAlteracao'),
+            'classes': ('collapse',)
+        }),
+    )
 
 @admin.register(Dividendo)
 class DividendoAdmin(admin.ModelAdmin):
@@ -30,6 +58,16 @@ class DividendoAdmin(admin.ModelAdmin):
     list_filter = ['data', 'ativo__usuario', 'ativo__categoria']
     search_fields = ['ativo__ticker', 'ativo__nome']
     ordering = ['-data', '-dataCriacao']
+    readonly_fields = ['dataCriacao', 'dataAlteracao']
+    fieldsets = (
+        ('Informações Básicas', {
+            'fields': ('ativo', 'data', 'valor')
+        }),
+        ('Informações do Sistema', {
+            'fields': ('dataCriacao', 'dataAlteracao'),
+            'classes': ('collapse',)
+        }),
+    )
 
 @admin.register(EvolucaoPatrimonial)
 class EvolucaoPatrimonialAdmin(admin.ModelAdmin):

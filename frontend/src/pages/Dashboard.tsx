@@ -39,10 +39,13 @@ interface MovimentacaoSummary {
   moeda: string
   categoriaId: number
   categoriaNome: string
+  categoriaTipo: string
+  categoriaSubtipo: string
 }
 
 interface CategoriaSummary {
-  nome: string
+  tipo: string
+  subtipo: string
   valorTotal: number
   percentual: number
 }
@@ -130,7 +133,9 @@ export default function Dashboard() {
         custoMedio: 0,
         moeda: ativo.moeda,
         categoriaId: ativo.categoria,
-        categoriaNome: ativo.categoria_display
+        categoriaNome: ativo.categoria_display,
+        categoriaTipo: ativo.categoria_tipo,
+        categoriaSubtipo: ativo.categoria_subtipo
       }
     })
 
@@ -172,24 +177,25 @@ export default function Dashboard() {
   }
 
   const calcularSumarioPorCategoria = (sumario: MovimentacaoSummary[]): CategoriaSummary[] => {
-    const categoriaMap: { [key: string]: number } = {}
+    const categoriaMap: { [key: string]: { tipo: string, subtipo: string, valorTotal: number } } = {}
     
     // Calculate total value for each category
     sumario.forEach(item => {
-      const categoriaNome = item.categoriaNome
-      if (!categoriaMap[categoriaNome]) {
-        categoriaMap[categoriaNome] = 0
+      const key = `${item.categoriaTipo}-${item.categoriaSubtipo}`
+      if (!categoriaMap[key]) {
+        categoriaMap[key] = { tipo: item.categoriaTipo, subtipo: item.categoriaSubtipo, valorTotal: 0 }
       }
-      categoriaMap[categoriaNome] += Math.abs(item.valorTotal)
+      categoriaMap[key].valorTotal += Math.abs(item.valorTotal)
     })
     
     // Calculate total portfolio value
-    const totalPortfolio = Object.values(categoriaMap).reduce((acc, curr) => acc + curr, 0)
+    const totalPortfolio = Object.values(categoriaMap).reduce((acc, curr) => acc + curr.valorTotal, 0)
     
     // Create summary array with percentages
-    return Object.entries(categoriaMap)
-      .map(([nome, valorTotal]) => ({
-        nome,
+    return Object.values(categoriaMap)
+      .map(({ tipo, subtipo, valorTotal }) => ({
+        tipo,
+        subtipo,
         valorTotal,
         percentual: (valorTotal / totalPortfolio) * 100
       }))
@@ -373,7 +379,7 @@ export default function Dashboard() {
   }
 
   const categoriaChartData = {
-    labels: sumarioCategorias.map(item => `${item.nome} - ${item.percentual.toFixed(1)}%`),
+    labels: sumarioCategorias.map(item => `${item.tipo} - ${item.subtipo} - ${item.percentual.toFixed(1)}%`),
     datasets: [
       {
         data: sumarioCategorias.map(item => item.valorTotal),
@@ -673,6 +679,55 @@ export default function Dashboard() {
                     Nenhum ativo encontrado para {getCurrencyDisplayName(currencyFilter)}
                   </p>
                 )}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6">
+              <h3 className="text-base font-semibold leading-6 text-gray-900">
+                Resumo de Investimentos ({currencyFilter})
+              </h3>
+              <div className="mt-6">
+                <dl className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+                  <div className="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
+                    <dt className="truncate text-sm font-medium text-gray-500">Total Investido</dt>
+                    <dd className="mt-1 text-3xl font-semibold tracking-tight text-gray-900">
+                      {new Intl.NumberFormat('pt-BR', {
+                        style: 'currency',
+                        currency: currencyFilter
+                      }).format(
+                        filteredAtivos.reduce((sum, ativo) => sum + ativo.total_investido, 0)
+                      )}
+                    </dd>
+                  </div>
+                  <div className="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
+                    <dt className="truncate text-sm font-medium text-gray-500">Valor Atual</dt>
+                    <dd className="mt-1 text-3xl font-semibold tracking-tight text-gray-900">
+                      {new Intl.NumberFormat('pt-BR', {
+                        style: 'currency',
+                        currency: currencyFilter
+                      }).format(
+                        filteredAtivos.reduce((sum, ativo) => sum + ativo.valor_atual, 0)
+                      )}
+                    </dd>
+                  </div>
+                  <div className="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
+                    <dt className="truncate text-sm font-medium text-gray-500">Rendimento Total</dt>
+                    <dd className={`mt-1 text-3xl font-semibold tracking-tight ${
+                      filteredAtivos.reduce((sum, ativo) => sum + ativo.rendimento, 0) >= 0 
+                        ? 'text-green-600' 
+                        : 'text-red-600'
+                    }`}>
+                      {new Intl.NumberFormat('pt-BR', {
+                        style: 'currency',
+                        currency: currencyFilter
+                      }).format(
+                        filteredAtivos.reduce((sum, ativo) => sum + ativo.rendimento, 0)
+                      )}
+                    </dd>
+                  </div>
+                </dl>
               </div>
             </div>
           </div>
