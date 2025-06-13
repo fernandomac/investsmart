@@ -102,6 +102,8 @@ export type Ativo = {
   total_investido: number;
   valor_atual: number;
   rendimento: number;
+  is_preco_estimado: boolean;
+  preco_atual: number;
 }
 
 type PaginatedResponse<T> = {
@@ -120,10 +122,11 @@ export const categoriaService = {
 };
 
 export const ativoService = {
-  getAll: (page?: number, pageSize?: number) => {
+  getAll: (page?: number, pageSize?: number, ticker?: string) => {
     const params = new URLSearchParams();
     if (page) params.append('page', page.toString());
     if (pageSize) params.append('page_size', pageSize.toString());
+    if (ticker) params.append('ticker', ticker);
     
     const queryString = params.toString();
     const url = queryString ? `/ativos/?${queryString}` : '/ativos/';

@@ -14,8 +14,10 @@
     "@emotion/styled": "^11.14.0",
     "@mui/icons-material": "^7.1.1",
     "@mui/material": "^7.1.1",
+    "@types/lodash": "^4.17.17",
     "chart.js": "^4.4.9",
     "date-fns": "^4.1.0",
+    "lodash": "^4.17.21",
     "react": "^19.1.0",
     "react-chartjs-2": "^5.3.0",
     "react-dom": "^19.1.0"

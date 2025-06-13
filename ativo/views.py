@@ -49,7 +49,14 @@ class AtivoViewSet(viewsets.ModelViewSet):
         This view should return a list of all ativos
         for the currently authenticated user.
         """
-        return Ativo.objects.filter(usuario=self.request.user)
+        queryset = Ativo.objects.filter(usuario=self.request.user)
+        
+        # Filter by ticker if provided
+        ticker = self.request.query_params.get('ticker')
+        if ticker:
+            queryset = queryset.filter(ticker__icontains=ticker)
+            
+        return queryset
 
     @action(detail=True, methods=['post'])
     def create_snapshot(self, request, pk=None):

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef, memo } from 'react'
 import type { Ativo, Categoria } from '../services/api'
 import { ativoService, categoriaService } from '../services/api'
 import { format } from 'date-fns'
@@ -8,6 +8,9 @@ import { IconButton } from '@mui/material'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteIcon from '@mui/icons-material/Delete'
 import WarningIcon from '@mui/icons-material/Warning'
+import SearchIcon from '@mui/icons-material/Search'
+import CloseIcon from '@mui/icons-material/Close'
+import FilterListIcon from '@mui/icons-material/FilterList'
 
 const formatCurrency = (value: number, currency: string = 'BRL') => {
   return new Intl.NumberFormat('pt-BR', {
@@ -15,6 +18,38 @@ const formatCurrency = (value: number, currency: string = 'BRL') => {
     currency: currency
   }).format(value);
 };
+
+// Separate TickerFilter component
+const TickerFilter = memo(({ onFilterChange }: { onFilterChange: (value: string) => void }) => {
+  const handleChange = useCallback(
+    debounce((value: string) => {
+      onFilterChange(value)
+    }, 300),
+    [onFilterChange]
+  )
+
+  return (
+    <div className="w-full sm:w-auto">
+      <label htmlFor="ticker-filter" className="block text-sm font-medium text-gray-700 mb-2">
+        Filtrar por Ticker
+      </label>
+      <div className="relative rounded-md shadow-sm">
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <SearchIcon className="h-5 w-5 text-gray-400" />
+        </div>
+        <input
+          type="text"
+          id="ticker-filter"
+          onChange={(e) => handleChange(e.target.value)}
+          placeholder="Digite o ticker..."
+          className="block w-full pl-10 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+        />
+      </div>
+    </div>
+  )
+})
+
+TickerFilter.displayName = 'TickerFilter'
 
 function Ativos() {
   const [ativos, setAtivos] = useState<Ativo[]>([])
@@ -41,6 +76,9 @@ function Ativos() {
     dataVencimento: '',
     anotacao: '',
   })
+
+  const [tickerFilter, setTickerFilter] = useState('')
+  const filterInputRef = useRef<HTMLInputElement>(null)
 
   const MOEDA_OPTIONS = [
     { value: 'BRL', label: 'Real (BRL)' },
@@ -74,11 +112,9 @@ function Ativos() {
 
   const fetchAllAtivos = useCallback(async () => {
     try {
-      // Fetch all ativos without pagination for peso calculation and currency filter
-      const response = await ativoService.getAll(1, 1000) // Large page size to get all
+      const response = await ativoService.getAll(1, 1000, tickerFilter)
       setAllAtivos(response.data.results)
       
-      // Set default currency to the first available currency if BRL is not available
       if (response.data.results.length > 0) {
         const availableCurrencies = Array.from(new Set(response.data.results.map(ativo => ativo.moeda)))
         if (!availableCurrencies.includes('BRL') && availableCurrencies.length > 0) {
@@ -88,17 +124,16 @@ function Ativos() {
     } catch (error) {
       console.error('Error fetching all ativos:', error)
     }
-  }, [])
+  }, [tickerFilter])
 
   const fetchData = useCallback(async (page: number = 1) => {
     setLoading(true)
     try {
       const [ativosResponse, categoriasResponse] = await Promise.all([
-        ativoService.getAll(page, pageSize),
+        ativoService.getAll(page, pageSize, tickerFilter),
         categoriaService.getAll()
       ])
       
-      // Handle paginated response
       setAtivos(ativosResponse.data.results)
       setTotalCount(ativosResponse.data.count)
       setTotalPages(Math.ceil(ativosResponse.data.count / pageSize))
@@ -110,12 +145,12 @@ function Ativos() {
     } finally {
       setLoading(false)
     }
-  }, [pageSize])
+  }, [pageSize, tickerFilter])
 
   useEffect(() => {
     fetchAllAtivos()
     fetchData(1)
-  }, [fetchAllAtivos, fetchData])
+  }, []) // Only fetch on initial load
 
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
@@ -258,6 +293,15 @@ function Ativos() {
     )
   }
 
+  const handleTickerFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTickerFilter(e.target.value)
+  }
+
+  const handleFilter = () => {
+    fetchAllAtivos()
+    fetchData(1)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -305,168 +349,147 @@ function Ativos() {
         </div>
       </div>
 
-      {/* Currency Filter - Separate row */}
-      <div className="mt-6 flex justify-end">
-        <div>
-          <label htmlFor="currency-filter" className="block text-sm font-medium text-gray-700 mb-2">
-            Moeda
-          </label>
-          <select
-            id="currency-filter"
-            value={currencyFilter}
-            onChange={(e) => setCurrencyFilter(e.target.value)}
-            className="rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm min-w-[180px]"
-          >
-            {getAvailableCurrencies().map(currency => (
-              <option key={currency} value={currency}>
-                {getCurrencyDisplayName(currency)}
-              </option>
-            ))}
-          </select>
+      {/* Filters Section */}
+      <div className="mt-6 flex items-center justify-end gap-4">
+        <select
+          id="currency-filter"
+          value={currencyFilter}
+          onChange={(e) => setCurrencyFilter(e.target.value)}
+          className="h-10 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+        >
+          {getAvailableCurrencies().map(currency => (
+            <option key={currency} value={currency}>
+              {getCurrencyDisplayName(currency)}
+            </option>
+          ))}
+        </select>
+
+        <div className="relative flex-1 max-w-md">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <SearchIcon className="h-5 w-5 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            id="ticker-filter"
+            value={tickerFilter}
+            onChange={handleTickerFilterChange}
+            placeholder="Filtrar por ticker..."
+            className="h-10 block w-full pl-10 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+          />
         </div>
+
+        <button
+          onClick={handleFilter}
+          className="h-10 inline-flex items-center px-4 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+        >
+          <FilterListIcon className="h-5 w-5 mr-2" />
+          Filtrar
+        </button>
       </div>
 
+      {/* Form Section */}
       {showForm && (
-        <div className="fixed inset-0 z-10 overflow-y-auto">
-          <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-            <div className="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
-              <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="mt-6 bg-blue-50 shadow sm:rounded-lg">
+          <div className="px-4 py-5 sm:p-6">
+            <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
+              {editingAtivo ? 'Editar Ativo' : 'Adicionar Ativo'}
+            </h3>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label htmlFor="ticker" className="block text-sm font-medium text-gray-700">
-                    Ticker
-                  </label>
                   <input
                     type="text"
-                    name="ticker"
-                    id="ticker"
                     value={formData.ticker}
-                    onChange={(e) => setFormData({ ...formData, ticker: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                    required
+                    onChange={(e) => setFormData({...formData, ticker: e.target.value})}
+                    placeholder="Ticker"
+                    className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800 placeholder-gray-500"
                   />
                 </div>
-
                 <div>
-                  <label htmlFor="nome" className="block text-sm font-medium text-gray-700">
-                    Nome
-                  </label>
                   <input
                     type="text"
-                    name="nome"
-                    id="nome"
                     value={formData.nome}
-                    onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                    required
+                    onChange={(e) => setFormData({...formData, nome: e.target.value})}
+                    placeholder="Nome"
+                    className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800 placeholder-gray-500"
                   />
                 </div>
-
                 <div>
-                  <label htmlFor="moeda" className="block text-sm font-medium text-gray-700">
-                    Moeda
-                  </label>
                   <select
-                    name="moeda"
-                    id="moeda"
                     value={formData.moeda}
-                    onChange={(e) => setFormData({ ...formData, moeda: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                    required
+                    onChange={(e) => setFormData({...formData, moeda: e.target.value})}
+                    className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800"
                   >
-                    <option value="">Selecione uma moeda</option>
+                    <option value="" className="text-gray-500">Selecione a moeda</option>
                     {MOEDA_OPTIONS.map(option => (
-                      <option key={option.value} value={option.value}>
+                      <option key={option.value} value={option.value} className="text-gray-800">
                         {option.label}
                       </option>
                     ))}
                   </select>
                 </div>
-
                 <div>
-                  <label htmlFor="categoria" className="block text-sm font-medium text-gray-700">
-                    Categoria
-                  </label>
                   <select
-                    name="categoria"
-                    id="categoria"
                     value={formData.categoria}
-                    onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                    required
+                    onChange={(e) => setFormData({...formData, categoria: e.target.value})}
+                    className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800"
                   >
-                    <option value="">Selecione uma categoria</option>
+                    <option value="" className="text-gray-500">Selecione a categoria</option>
                     {categorias.map(categoria => (
-                      <option key={categoria.id} value={categoria.id}>
+                      <option key={categoria.id} value={categoria.id} className="text-gray-800">
                         {categoria.tipo} - {categoria.subtipo}
                       </option>
                     ))}
                   </select>
                 </div>
-
                 <div>
-                  <label htmlFor="peso" className="block text-sm font-medium text-gray-700">
-                    Peso (%)
-                  </label>
                   <input
                     type="number"
-                    name="peso"
-                    id="peso"
                     step="0.01"
-                    min="0"
-                    max="100"
                     value={formData.peso}
-                    onChange={(e) => setFormData({ ...formData, peso: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    onChange={(e) => setFormData({...formData, peso: e.target.value})}
+                    placeholder="Peso (%)"
+                    className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800 placeholder-gray-500"
                   />
-                  <p className="mt-1 text-sm text-gray-500">Percentual desejado na carteira (por moeda)</p>
                 </div>
-
                 <div>
-                  <label htmlFor="dataVencimento" className="block text-sm font-medium text-gray-700">
-                    Data de Vencimento (opcional)
-                  </label>
                   <input
                     type="date"
-                    name="dataVencimento"
-                    id="dataVencimento"
                     value={formData.dataVencimento}
-                    onChange={(e) => setFormData({ ...formData, dataVencimento: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    onChange={(e) => setFormData({...formData, dataVencimento: e.target.value})}
+                    className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800"
                   />
                 </div>
-
-                <div>
-                  <label htmlFor="anotacao" className="block text-sm font-medium text-gray-700">
-                    Anotações
-                  </label>
+                <div className="sm:col-span-2">
                   <textarea
-                    name="anotacao"
-                    id="anotacao"
                     value={formData.anotacao}
-                    onChange={(e) => setFormData({ ...formData, anotacao: e.target.value })}
+                    onChange={(e) => setFormData({...formData, anotacao: e.target.value})}
+                    placeholder="Anotação"
                     rows={3}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="block w-full px-3 py-2 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800 placeholder-gray-500"
                   />
-                  <p className="mt-1 text-sm text-gray-500">Anotações gerais sobre o ativo</p>
                 </div>
-
-                <div className="mt-5 sm:mt-6 sm:grid sm:grid-flow-row-dense sm:grid-cols-2 sm:gap-3">
-                  <button
-                    type="submit"
-                    className="inline-flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 sm:col-start-2"
-                  >
-                    {editingAtivo ? 'Salvar' : 'Adicionar'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowForm(false)}
-                    className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:col-start-1 sm:mt-0"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </form>
-            </div>
+              </div>
+              <div className="flex justify-end gap-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForm(false)
+                    setFormData({ ticker: '', nome: '', moeda: '', categoria: '', peso: '0', dataVencimento: '', anotacao: '' })
+                    setEditingAtivo(null)
+                  }}
+                  className="h-10 inline-flex items-center px-4 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="h-10 inline-flex items-center px-4 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                >
+                  {editingAtivo ? 'Salvar' : 'Adicionar'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
