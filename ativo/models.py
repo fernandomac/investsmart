@@ -85,6 +85,7 @@ class Ativo(models.Model):
     dataVencimento = models.DateField(null=True, blank=True, help_text='Data de vencimento para investimentos de renda fixa')
     anotacao = models.TextField(blank=True, help_text='Anotações gerais sobre o ativo')
     icone_url = models.URLField(blank=True, null=True, help_text='URL do ícone do ativo')
+    icone_url = models.URLField(blank=True, null=True, help_text='URL do ícone do ativo')
     dataCriacao = models.DateTimeField(auto_now_add=True)
     dataAlteracao = models.DateTimeField(auto_now=True)
     valor_atual = models.DecimalField(max_digits=15, decimal_places=2, default=0)
