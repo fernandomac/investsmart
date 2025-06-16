@@ -75,6 +75,7 @@ function Ativos() {
     dataVencimento: '',
     anotacao: '',
     valor_atual: '0',
+    icone_url: '',
   })
 
   const [tickerFilter, setTickerFilter] = useState('')
@@ -197,11 +198,12 @@ function Ativos() {
       ticker: ativo.ticker,
       nome: ativo.nome,
       moeda: ativo.moeda,
-      categoria: String(ativo.categoria),
-      peso: String(ativo.peso || 0),
+      categoria: ativo.categoria.toString(),
+      peso: ativo.peso.toString(),
       dataVencimento: ativo.dataVencimento || '',
       anotacao: ativo.anotacao || '',
-      valor_atual: String(ativo.valor_atual || 0),
+      valor_atual: ativo.valor_atual.toString(),
+      icone_url: ativo.icone_url || '',
     })
     setShowForm(true)
   }
@@ -225,6 +227,7 @@ function Ativos() {
         dataVencimento: formData.dataVencimento || null,
         anotacao: formData.anotacao,
         valor_atual: parseFloat(formData.valor_atual),
+        icone_url: formData.icone_url || null,
       }
 
       let response;
@@ -245,7 +248,7 @@ function Ativos() {
       
       await fetchData()
       setShowForm(false)
-      setFormData({ ticker: '', nome: '', moeda: '', categoria: '', peso: '0', dataVencimento: '', anotacao: '', valor_atual: '0' })
+      setFormData({ ticker: '', nome: '', moeda: '', categoria: '', peso: '0', dataVencimento: '', anotacao: '', valor_atual: '0', icone_url: '' })
       setEditingAtivo(null)
     } catch (error: any) {
       console.error('Erro ao salvar ativo:', error)
@@ -292,19 +295,6 @@ function Ativos() {
     return ((ativo.valor_atual - totalInvestido) / totalInvestido) * 100
   }
 
-  const getValorAtualDisplay = (ativo: Ativo) => {
-    if (ativo.is_preco_estimado) {
-      return (
-        <Tooltip title="Valor estimado - não foi possível obter o preço atual">
-          <span style={{ color: '#ffa726' }}>
-            {formatCurrency(ativo.valor_atual, ativo.moeda)} *
-          </span>
-        </Tooltip>
-      );
-    }
-    return formatCurrency(ativo.valor_atual, ativo.moeda);
-  }
-
   const getRendimentoDisplay = (ativo: Ativo) => {
     const rendimento = calculateRendimento(ativo)
     const rendimentoPercentual = calculateRendimentoPercentual(ativo)
@@ -336,6 +326,22 @@ function Ativos() {
       console.error('Error updating price:', error)
       alert('Erro ao atualizar preço. Por favor, tente novamente.')
     }
+  }
+
+  const handleCancel = () => {
+    setShowForm(false)
+    setFormData({ 
+      ticker: '', 
+      nome: '', 
+      moeda: '', 
+      categoria: '', 
+      peso: '0', 
+      dataVencimento: '', 
+      anotacao: '', 
+      valor_atual: '0',
+      icone_url: '',
+    })
+    setEditingAtivo(null)
   }
 
   if (loading) {
@@ -383,6 +389,7 @@ function Ativos() {
                 dataVencimento: '',
                 anotacao: '',
                 valor_atual: '0',
+                icone_url: '',
               })
               setShowForm(true)
             }}
@@ -440,7 +447,7 @@ function Ativos() {
             </h3>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
+                <div className="space-y-2">
                   <input
                     type="text"
                     value={formData.ticker}
@@ -448,6 +455,7 @@ function Ativos() {
                     placeholder="Ticker"
                     className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800 placeholder-gray-500"
                   />
+                 
                 </div>
                 <div>
                   <input
@@ -514,6 +522,28 @@ function Ativos() {
                     className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800"
                   />
                 </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    {formData.icone_url && (
+                        <img 
+                          src={formData.icone_url} 
+                          alt="Ícone" 
+                          className="h-6 w-6 object-contain"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
+                      )}
+                    <input
+                        type="url"
+                        value={formData.icone_url}
+                        onChange={(e) => setFormData({...formData, icone_url: e.target.value})}
+                        placeholder="URL do ícone"
+                        className="h-10 flex-1 px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800 placeholder-gray-500"
+                      />
+                  </div>
+                </div>
                 <div className="sm:col-span-2">
                   <textarea
                     value={formData.anotacao}
@@ -527,11 +557,7 @@ function Ativos() {
               <div className="flex justify-end gap-4">
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowForm(false)
-                    setFormData({ ticker: '', nome: '', moeda: '', categoria: '', peso: '0', dataVencimento: '', anotacao: '', valor_atual: '0' })
-                    setEditingAtivo(null)
-                  }}
+                  onClick={handleCancel}
                   className="h-10 inline-flex items-center px-4 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                 >
                   Cancelar
