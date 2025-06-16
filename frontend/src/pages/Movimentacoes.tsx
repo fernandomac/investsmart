@@ -85,6 +85,14 @@ export default function Movimentacoes() {
     return years
   }
 
+  // Get unique tickers from ativos for filter dropdown
+  const getAvailableTickers = (): string[] => {
+    if (!ativos || ativos.length === 0) return []
+    
+    const uniqueTickers = [...new Set(ativos.map(ativo => ativo.ticker))]
+    return uniqueTickers.sort()
+  }
+
   const loadMovimentacoes = useCallback(async (page: number = 1, resetPage: boolean = false) => {
     setIsLoading(true)
     try {
@@ -313,14 +321,19 @@ export default function Movimentacoes() {
           </div>
 
           <div>
-            <input
-              type="text"
+            <select
               id="ticker-filter"
               value={tickerFilter}
               onChange={(e) => setTickerFilter(e.target.value)}
-              placeholder="Digite o ticker..."
-              className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800 placeholder-gray-500"
-            />
+              className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800"
+            >
+              <option value="">Todos os tickers</option>
+              {getAvailableTickers().map(ticker => (
+                <option key={ticker} value={ticker}>
+                  {ticker}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="flex items-end">
@@ -346,7 +359,7 @@ export default function Movimentacoes() {
       </div>
 
       {showForm && (
-        <div className="mt-8 bg-white shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg p-6">
+        <div className="mt-8 bg-blue-50 shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg p-6">
           <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
             {editingMovimentacao ? 'Editar Movimentação' : 'Adicionar Movimentação'}
           </h3>
