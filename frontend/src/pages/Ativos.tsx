@@ -89,6 +89,7 @@ function Ativos() {
   ]
 
   const getFilteredAtivos = () => {
+    if (!ativos) return []
     return ativos.filter(ativo => {
       const matchesCurrency = ativo.moeda === currencyFilter
       const matchesTicker = !tickerFilter || ativo.ticker.toLowerCase().includes(tickerFilter.toLowerCase())
@@ -97,6 +98,7 @@ function Ativos() {
   }
 
   const getAvailableCurrencies = () => {
+    if (!ativos) return []
     const currencies = Array.from(new Set(ativos.map(ativo => ativo.moeda)))
     return currencies.sort()
   }
@@ -132,23 +134,11 @@ function Ativos() {
     setLoading(true)
     try {
       const [ativosResponse, categoriasResponse] = await Promise.all([
-        ativoService.getAll(1, 1000, tickerFilter), // Fetch all ativos
+        ativoService.getAll(), // Remove pagination parameters
         categoriaService.getAll()
       ])
       
-      // Get all ativos by making multiple requests if needed
-      let allAtivos = ativosResponse.data.results
-      let nextPage = ativosResponse.data.next
-      
-      while (nextPage) {
-        const pageMatch = nextPage.match(/page=(\d+)/)
-        const page = pageMatch ? parseInt(pageMatch[1]) : 1
-        const nextResponse = await ativoService.getAll(page, 1000, tickerFilter)
-        allAtivos = [...allAtivos, ...nextResponse.data.results]
-        nextPage = nextResponse.data.next
-      }
-      
-      setAtivos(allAtivos)
+      setAtivos(Array.isArray(ativosResponse.data) ? ativosResponse.data : ativosResponse.data.results)
       setCurrentPage(1) // Reset to first page when data changes
       
       setCategorias(categoriasResponse.data)
@@ -157,7 +147,7 @@ function Ativos() {
     } finally {
       setLoading(false)
     }
-  }, [tickerFilter])
+  }, []) // Remove tickerFilter dependency since we're not using it in the API call anymore
 
   useEffect(() => {
     fetchData()

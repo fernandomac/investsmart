@@ -113,8 +113,9 @@ export default function Dividendos() {
 
   const loadAtivos = useCallback(async () => {
     try {
-      const response = await ativoService.getAll(1, 1000) // Large page size to get all
-      setAtivos(response.data.results)
+      const response = await ativoService.getAll()
+      setAtivos(Array.isArray(response.data) ? response.data : response.data.results)
+      console.log('All ativos:', Array.isArray(response.data) ? response.data : response.data.results)
     } catch (error) {
       console.error('Error loading ativos:', error)
       setError('Erro ao carregar ativos')
