@@ -6,11 +6,11 @@ import { Tooltip } from '@mui/material'
 import { Table, TableHead, TableBody, TableRow, TableCell } from '@mui/material'
 import { IconButton } from '@mui/material'
 import EditIcon from '@mui/icons-material/Edit'
-import DeleteIcon from '@mui/icons-material/Delete'
 import WarningIcon from '@mui/icons-material/Warning'
 import SearchIcon from '@mui/icons-material/Search'
-import CloseIcon from '@mui/icons-material/Close'
 import FilterListIcon from '@mui/icons-material/FilterList'
+import RefreshIcon from '@mui/icons-material/Refresh'
+import { debounce } from 'lodash'
 
 const formatCurrency = (value: number, currency: string = 'BRL') => {
   return new Intl.NumberFormat('pt-BR', {
@@ -62,11 +62,10 @@ function Ativos() {
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
-  const [totalCount, setTotalCount] = useState(0)
-  const [totalPages, setTotalPages] = useState(0)
-  const [pageSize] = useState(10) // Match backend PAGE_SIZE
-  const [allAtivos, setAllAtivos] = useState<Ativo[]>([]) // For peso calculation across all pages
-  
+  const [pageSize] = useState(10)
+  const [totalPeso, setTotalPeso] = useState(0)
+  const [pesoWarning, setPesoWarning] = useState<string | null>(null)
+
   const [formData, setFormData] = useState({
     ticker: '',
     nome: '',
@@ -75,6 +74,7 @@ function Ativos() {
     peso: '0',
     dataVencimento: '',
     anotacao: '',
+    valor_atual: '0',
   })
 
   const [tickerFilter, setTickerFilter] = useState('')
@@ -88,56 +88,67 @@ function Ativos() {
   ]
 
   const getFilteredAtivos = () => {
-    return ativos.filter(ativo => ativo.moeda === currencyFilter)
+    return ativos.filter(ativo => {
+      const matchesCurrency = ativo.moeda === currencyFilter
+      const matchesTicker = !tickerFilter || ativo.ticker.toLowerCase().includes(tickerFilter.toLowerCase())
+      return matchesCurrency && matchesTicker
+    })
   }
 
   const getAvailableCurrencies = () => {
-    const currencies = Array.from(new Set(allAtivos.map(ativo => ativo.moeda)))
+    const currencies = Array.from(new Set(ativos.map(ativo => ativo.moeda)))
     return currencies.sort()
   }
 
-  const getAllFilteredAtivos = () => {
-    return allAtivos.filter(ativo => ativo.moeda === currencyFilter)
+  const getCurrencyLabel = (currency: string) => {
+    const option = MOEDA_OPTIONS.find(opt => opt.value === currency)
+    return option ? option.label : currency
   }
 
-  const getCurrencyDisplayName = (currency: string) => {
-    const currencyNames: { [key: string]: string } = {
-      'BRL': 'Real (BRL)',
-      'USD': 'Dólar (USD)',
-      'EUR': 'Euro (EUR)',
-      'GBP': 'Libra (GBP)'
+  const calculateTotalPeso = useCallback((filteredAtivos: Ativo[]) => {
+    const total = filteredAtivos.reduce((sum, ativo) => sum + Number(ativo.peso || 0), 0)
+    setTotalPeso(total)
+    
+    if (total !== 100) {
+      setPesoWarning(`O peso total (${total.toFixed(2)}%) deve ser igual a 100%`)
+    } else {
+      setPesoWarning(null)
     }
-    return currencyNames[currency] || currency
+  }, [])
+
+  const calculateCurrentPeso = (ativo: Ativo, filteredAtivos: Ativo[]) => {
+    // Filter ativos by the same currency as the current ativo
+    const ativosSameCurrency = filteredAtivos.filter(a => a.moeda === ativo.moeda)
+    const totalValorAtual = ativosSameCurrency.reduce((sum, a) => sum + Number(a.valor_atual || 0), 0)
+    
+    if (totalValorAtual === 0) return 0
+    
+    const currentPeso = (Number(ativo.valor_atual || 0) / totalValorAtual) * 100
+    return isNaN(currentPeso) ? 0 : currentPeso
   }
 
-  const fetchAllAtivos = useCallback(async () => {
-    try {
-      const response = await ativoService.getAll(1, 1000, tickerFilter)
-      setAllAtivos(response.data.results)
-      
-      if (response.data.results.length > 0) {
-        const availableCurrencies = Array.from(new Set(response.data.results.map(ativo => ativo.moeda)))
-        if (!availableCurrencies.includes('BRL') && availableCurrencies.length > 0) {
-          setCurrencyFilter(availableCurrencies[0] as string)
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching all ativos:', error)
-    }
-  }, [tickerFilter])
-
-  const fetchData = useCallback(async (page: number = 1) => {
+  const fetchData = useCallback(async () => {
     setLoading(true)
     try {
       const [ativosResponse, categoriasResponse] = await Promise.all([
-        ativoService.getAll(page, pageSize, tickerFilter),
+        ativoService.getAll(1, 1000, tickerFilter), // Fetch all ativos
         categoriaService.getAll()
       ])
       
-      setAtivos(ativosResponse.data.results)
-      setTotalCount(ativosResponse.data.count)
-      setTotalPages(Math.ceil(ativosResponse.data.count / pageSize))
-      setCurrentPage(page)
+      // Get all ativos by making multiple requests if needed
+      let allAtivos = ativosResponse.data.results
+      let nextPage = ativosResponse.data.next
+      
+      while (nextPage) {
+        const pageMatch = nextPage.match(/page=(\d+)/)
+        const page = pageMatch ? parseInt(pageMatch[1]) : 1
+        const nextResponse = await ativoService.getAll(page, 1000, tickerFilter)
+        allAtivos = [...allAtivos, ...nextResponse.data.results]
+        nextPage = nextResponse.data.next
+      }
+      
+      setAtivos(allAtivos)
+      setCurrentPage(1) // Reset to first page when data changes
       
       setCategorias(categoriasResponse.data)
     } catch (error) {
@@ -145,23 +156,40 @@ function Ativos() {
     } finally {
       setLoading(false)
     }
-  }, [pageSize, tickerFilter])
+  }, [tickerFilter])
 
   useEffect(() => {
-    fetchAllAtivos()
-    fetchData(1)
+    fetchData()
   }, []) // Only fetch on initial load
 
   const handlePageChange = (newPage: number) => {
     if (newPage >= 1 && newPage <= totalPages) {
-      fetchData(newPage)
+      setCurrentPage(newPage)
     }
   }
 
   const handleRefresh = () => {
-    fetchAllAtivos()
-    fetchData(currentPage)
+    fetchData()
   }
+
+  // Calculate paginated ativos
+  const filteredAtivos = getFilteredAtivos()
+  const startIndex = (currentPage - 1) * pageSize
+  const endIndex = Math.min(startIndex + pageSize, filteredAtivos.length)
+  const paginatedAtivos = filteredAtivos.slice(startIndex, endIndex)
+  const totalPages = Math.max(1, Math.ceil(filteredAtivos.length / pageSize))
+
+  // Reset to first page if current page is out of bounds
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(1)
+    }
+  }, [currentPage, totalPages])
+
+  // Update total peso whenever filtered ativos change
+  useEffect(() => {
+    calculateTotalPeso(filteredAtivos)
+  }, [filteredAtivos, calculateTotalPeso])
 
   const handleEdit = (ativo: Ativo) => {
     setEditingAtivo(ativo)
@@ -173,6 +201,7 @@ function Ativos() {
       peso: String(ativo.peso || 0),
       dataVencimento: ativo.dataVencimento || '',
       anotacao: ativo.anotacao || '',
+      valor_atual: String(ativo.valor_atual || 0),
     })
     setShowForm(true)
   }
@@ -195,20 +224,28 @@ function Ativos() {
         peso: parseFloat(formData.peso),
         dataVencimento: formData.dataVencimento || null,
         anotacao: formData.anotacao,
+        valor_atual: parseFloat(formData.valor_atual),
       }
 
+      let response;
       if (editingAtivo) {
-        await ativoService.update(editingAtivo.id, data)
+        response = await ativoService.update(editingAtivo.id, data)
       } else {
-        await ativoService.create(data)
+        response = await ativoService.create(data)
       }
       
-      await Promise.all([
-        fetchAllAtivos(), // Refresh all ativos for peso calculation
-        fetchData(currentPage) // Refresh current page data
-      ])
+      // Update the ativo in the list with the response data
+      if (editingAtivo) {
+        setAtivos(prevAtivos => 
+          prevAtivos.map(ativo => 
+            ativo.id === editingAtivo.id ? response.data : ativo
+          )
+        )
+      }
+      
+      await fetchData()
       setShowForm(false)
-      setFormData({ ticker: '', nome: '', moeda: '', categoria: '', peso: '0', dataVencimento: '', anotacao: '' })
+      setFormData({ ticker: '', nome: '', moeda: '', categoria: '', peso: '0', dataVencimento: '', anotacao: '', valor_atual: '0' })
       setEditingAtivo(null)
     } catch (error: any) {
       console.error('Erro ao salvar ativo:', error)
@@ -224,11 +261,6 @@ function Ativos() {
     }
   }
 
-  // Calculate total peso for the selected currency across all ativos (not just current page)
-  const filteredAtivos = getFilteredAtivos()
-  const allFilteredAtivos = getAllFilteredAtivos()
-  const totalPeso = allFilteredAtivos.reduce((sum, ativo) => sum + Number(ativo.peso || 0), 0)
-  
   // Determine status color
   const getPesoStatusColor = (total: number) => {
     if (total === 100) return 'text-green-600'
@@ -238,17 +270,12 @@ function Ativos() {
 
   // Helper for pagination page numbers
   const getPageNumbers = () => {
-    const pages = [];
-    let start = Math.max(1, currentPage - 2);
-    let end = Math.min(totalPages, start + 4);
-    if (end - start < 4) {
-      start = Math.max(1, end - 4);
+    const pages = []
+    for (let i = 1; i <= totalPages; i++) {
+      pages.push(i)
     }
-    for (let i = start; i <= end; i++) {
-      pages.push(i);
-    }
-    return pages;
-  };
+    return pages
+  }
 
   const calculateTotalInvestido = (ativo: Ativo) => {
     return ativo.quantidade * ativo.preco_medio
@@ -298,8 +325,17 @@ function Ativos() {
   }
 
   const handleFilter = () => {
-    fetchAllAtivos()
-    fetchData(1)
+    fetchData()
+  }
+
+  const handleUpdatePrice = async (ativo: Ativo) => {
+    try {
+      await ativoService.updatePrice(ativo.id)
+      await fetchData()
+    } catch (error) {
+      console.error('Error updating price:', error)
+      alert('Erro ao atualizar preço. Por favor, tente novamente.')
+    }
   }
 
   if (loading) {
@@ -318,6 +354,13 @@ function Ativos() {
           <p className="mt-2 text-sm text-gray-600">
             Lista de todos os seus ativos de investimento.
           </p>
+          <div className="mt-2 text-sm">
+            {pesoWarning ? (
+              <span className="text-red-600">{pesoWarning}</span>
+            ) : (
+              <span className="text-gray-600">Peso Total: {totalPeso.toFixed(2)}%</span>
+            )}
+          </div>
         </div>
         <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none flex gap-2">
           <button
@@ -339,6 +382,7 @@ function Ativos() {
                 peso: '0',
                 dataVencimento: '',
                 anotacao: '',
+                valor_atual: '0',
               })
               setShowForm(true)
             }}
@@ -359,7 +403,7 @@ function Ativos() {
         >
           {getAvailableCurrencies().map(currency => (
             <option key={currency} value={currency}>
-              {getCurrencyDisplayName(currency)}
+              {getCurrencyLabel(currency)}
             </option>
           ))}
         </select>
@@ -454,6 +498,16 @@ function Ativos() {
                 </div>
                 <div>
                   <input
+                    type="number"
+                    step="0.01"
+                    value={formData.valor_atual}
+                    onChange={(e) => setFormData({...formData, valor_atual: e.target.value})}
+                    placeholder="Valor Atual"
+                    className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800 placeholder-gray-500"
+                  />
+                </div>
+                <div>
+                  <input
                     type="date"
                     value={formData.dataVencimento}
                     onChange={(e) => setFormData({...formData, dataVencimento: e.target.value})}
@@ -475,7 +529,7 @@ function Ativos() {
                   type="button"
                   onClick={() => {
                     setShowForm(false)
-                    setFormData({ ticker: '', nome: '', moeda: '', categoria: '', peso: '0', dataVencimento: '', anotacao: '' })
+                    setFormData({ ticker: '', nome: '', moeda: '', categoria: '', peso: '0', dataVencimento: '', anotacao: '', valor_atual: '0' })
                     setEditingAtivo(null)
                   }}
                   className="h-10 inline-flex items-center px-4 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
@@ -513,7 +567,7 @@ function Ativos() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredAtivos.map((ativo) => (
+                  {paginatedAtivos.map((ativo) => (
                     <TableRow key={ativo.id}>
                       <TableCell>
                         <div>
@@ -555,9 +609,15 @@ function Ativos() {
                       <TableCell>
                         <div style={{ color: getPesoStatusColor(Number(ativo.peso || 0)) }}>
                           {Number(ativo.peso || 0).toFixed(2)}%
+                          <div style={{ fontSize: '0.75rem', color: 'gray', marginTop: 2 }}>
+                            {calculateCurrentPeso(ativo, filteredAtivos).toFixed(2)}%
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell align="right">
+                        <IconButton onClick={() => handleUpdatePrice(ativo)}>
+                          <RefreshIcon />
+                        </IconButton>
                         <IconButton onClick={() => handleEdit(ativo)}>
                           <EditIcon />
                         </IconButton>
@@ -571,66 +631,89 @@ function Ativos() {
         </div>
         
         {/* Pagination Controls */}
-        {totalPages > 1 && (
-          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-            <div className="flex-1 flex justify-between sm:hidden">
+        {filteredAtivos.length > 0 && (
+          <div className="mt-4 flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
+            <div className="flex flex-1 justify-between sm:hidden">
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
               >
                 Anterior
               </button>
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
               >
                 Próximo
               </button>
             </div>
-            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+            <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm text-gray-700">
-                  Mostrando <span className="font-medium">{(currentPage - 1) * pageSize + 1}</span> a{' '}
-                  <span className="font-medium">
-                    {Math.min(currentPage * pageSize, totalCount)}
-                  </span>{' '}
-                  de <span className="font-medium">{totalCount}</span> ativos
+                  Mostrando <span className="font-medium">{startIndex + 1}</span> a{' '}
+                  <span className="font-medium">{endIndex}</span>{' '}
+                  de <span className="font-medium">{filteredAtivos.length}</span> ativos
                 </p>
               </div>
               <div>
-                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
                   <button
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{
+                      backgroundColor: 'transparent',
+                      color: '#374151',
+                      border: '1px solid #e5e7eb',
+                      padding: '0.5rem 0.75rem',
+                      fontSize: '0.875rem',
+                      fontWeight: 600,
+                      position: 'relative',
+                      borderTopLeftRadius: '0.375rem',
+                      borderBottomLeftRadius: '0.375rem',
+                    }}
+                    className="relative inline-flex items-center hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
                   >
                     <span className="sr-only">Anterior</span>
                     <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                       <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
                     </svg>
                   </button>
-                  
-                  {/* Page Numbers */}
-                  {getPageNumbers().map(page => (
+                  {getPageNumbers().map((page) => (
                     <button
-                      key={`page-${page}`}
+                      key={page}
                       onClick={() => handlePageChange(page)}
-                      className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                        page === currentPage
-                          ? 'z-10 bg-primary-50 border-primary-500 text-primary-600'
-                          : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                      }`}
+                      style={{
+                        backgroundColor: page === currentPage ? '#f3f4f6' : 'transparent',
+                        color: page === currentPage ? '#1f2937' : '#374151',
+                        border: '1px solid #e5e7eb',
+                        padding: '0.5rem 1rem',
+                        fontSize: '0.875rem',
+                        fontWeight: 600,
+                        position: 'relative',
+                        zIndex: page === currentPage ? 10 : 1,
+                      }}
+                      className="relative inline-flex items-center hover:bg-gray-50 focus:z-20 focus:outline-offset-0"
                     >
                       {page}
                     </button>
                   ))}
-                  
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
-                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{
+                      backgroundColor: 'transparent',
+                      color: '#374151',
+                      border: '1px solid #e5e7eb',
+                      padding: '0.5rem 0.75rem',
+                      fontSize: '0.875rem',
+                      fontWeight: 600,
+                      position: 'relative',
+                      borderTopRightRadius: '0.375rem',
+                      borderBottomRightRadius: '0.375rem',
+                    }}
+                    className="relative inline-flex items-center hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
                   >
                     <span className="sr-only">Próximo</span>
                     <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">

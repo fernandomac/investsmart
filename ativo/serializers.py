@@ -14,7 +14,7 @@ class AtivoSerializer(serializers.ModelSerializer):
     categoria_subtipo = serializers.CharField(source='categoria.subtipo', read_only=True)
     categoria_display = serializers.SerializerMethodField()
     total_investido = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
-    valor_atual = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
+    valor_atual = serializers.DecimalField(max_digits=15, decimal_places=2)
     rendimento = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     rendimento_percentual = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
     preco_atual = serializers.DecimalField(max_digits=15, decimal_places=2, read_only=True)
@@ -43,14 +43,11 @@ class AtivoSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("O peso deve estar entre 0 e 100.")
         return value
 
-    def to_representation(self, instance):
-        # Update valor_atual if it is zero or outdated
-        if instance.valor_atual == 0 or instance.is_preco_estimado:
-            try:
-                instance.update_valor_atual()
-            except Exception as e:
-                pass  # Optionally log the error
-        return super().to_representation(instance)
+    def update(self, instance, validated_data):
+        # If valor_atual is being updated, set is_preco_estimado to False
+        if 'valor_atual' in validated_data:
+            instance.is_preco_estimado = False
+        return super().update(instance, validated_data)
 
 class MovimentacaoSerializer(serializers.ModelSerializer):
     ativo_display = serializers.SerializerMethodField()

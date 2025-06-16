@@ -11,7 +11,7 @@ class CategoriaAdmin(admin.ModelAdmin):
 
 @admin.register(Ativo)
 class AtivoAdmin(admin.ModelAdmin):
-    list_display = ['ticker', 'nome', 'moeda', 'categoria', 'peso', 'quantidade', 'preco_medio', 'dataVencimento', 'usuario', 'dataCriacao', 'dataAlteracao']
+    list_display = ['ticker', 'nome', 'moeda', 'categoria', 'peso', 'quantidade', 'preco_medio', 'valor_atual', 'dataVencimento', 'usuario', 'dataCriacao', 'dataAlteracao']
     list_filter = ['moeda', 'categoria', 'usuario', 'dataVencimento']
     search_fields = ['ticker', 'nome', 'anotacao']
     ordering = ['ticker']
@@ -21,7 +21,7 @@ class AtivoAdmin(admin.ModelAdmin):
             'fields': ('ticker', 'nome', 'moeda', 'categoria', 'usuario')
         }),
         ('Investimento', {
-            'fields': ('peso', 'quantidade', 'preco_medio', 'dataVencimento')
+            'fields': ('peso', 'quantidade', 'preco_medio', 'valor_atual', 'dataVencimento')
         }),
         ('Detalhes', {
             'fields': ('anotacao', 'icone_url')

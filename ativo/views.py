@@ -59,6 +59,20 @@ class AtivoViewSet(viewsets.ModelViewSet):
         return queryset
 
     @action(detail=True, methods=['post'])
+    def update_price(self, request, pk=None):
+        """Update the current price and value of an asset."""
+        ativo = self.get_object()
+        try:
+            ativo.update_valor_atual()
+            return Response(AtivoSerializer(ativo).data)
+        except Exception as e:
+            logger.error(f"Error updating price for {ativo.ticker}: {str(e)}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=True, methods=['post'])
     def create_snapshot(self, request, pk=None):
         ativo = self.get_object()
         try:

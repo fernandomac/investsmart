@@ -137,6 +137,7 @@ export const ativoService = {
   create: (data: Partial<Ativo>) => api.post<Ativo>('/ativos/', data),
   update: (id: number, data: Partial<Ativo>) => api.put<Ativo>(`/ativos/${id}/`, data),
   delete: (id: number) => api.delete(`/ativos/${id}/`),
+  updatePrice: (id: number) => api.post<Ativo>(`/ativos/${id}/update_price/`),
 };
 
 export type Movimentacao = {
