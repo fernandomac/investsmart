@@ -2,6 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { format } from 'date-fns'
 import { movimentacaoService, ativoService, type Movimentacao, type Ativo } from '../services/api'
 import type { MovimentacaoFormData, Operacao } from '../types/movimentacao'
+import { Table, TableHead, TableBody, TableRow, TableCell } from '@mui/material'
+import { IconButton } from '@mui/material'
+import EditIcon from '@mui/icons-material/Edit'
+import DeleteIcon from '@mui/icons-material/Delete'
+
 
 const OPERACAO_OPTIONS = [
   { value: 'COMPRA', label: 'Compra' },
@@ -10,6 +15,13 @@ const OPERACAO_OPTIONS = [
   { value: 'GRUPAMENTO', label: 'Grupamento' },
   { value: 'DESDOBRAMENTO', label: 'Desdobramento' },
 ]
+
+const formatCurrency = (value: number, currency: string = 'BRL') => {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: currency
+  }).format(value);
+};
 
 export default function Movimentacoes() {
   const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([])
@@ -27,6 +39,10 @@ export default function Movimentacoes() {
   // Filter state
   const [yearFilter, setYearFilter] = useState<number | ''>('')
   const [tickerFilter, setTickerFilter] = useState('')
+  const [appliedFilters, setAppliedFilters] = useState({
+    year: '' as string | number,
+    ticker: ''
+  })
   
   const [formData, setFormData] = useState<MovimentacaoFormData>({
     ativo: 0,
@@ -55,28 +71,6 @@ export default function Movimentacoes() {
       'GBP': '£'
     }
     return symbols[currency] || currency
-  }
-
-  // Helper function to format currency based on ativo's currency
-  const formatCurrency = (value: number | string, ativoId: number): string => {
-    // Ensure value is a number
-    const numValue = typeof value === 'string' ? parseFloat(value) : value
-    
-    if (isNaN(numValue)) {
-      return 'R$ 0,00'
-    }
-    
-    if (!ativos || ativos.length === 0) {
-      return `R$ ${numValue.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`
-    }
-    
-    const currency = getAtivoCurrency(ativoId)
-    const symbol = getCurrencySymbol(currency)
-    
-    // Format number with appropriate decimal places and separators
-    const formattedNumber = numValue.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-    
-    return `${symbol} ${formattedNumber}`
   }
 
   // Get available years for filter (2020 to current year + 1)
@@ -116,35 +110,46 @@ export default function Movimentacoes() {
     }
   }, [yearFilter, tickerFilter, pageSize])
 
-  const loadAtivos = useCallback(async () => {
+  const loadAtivos = async () => {
     try {
-      const response = await ativoService.getAll(1, 1000) // Large page size to get all
-      setAtivos(response.data.results)
+      const response = await ativoService.getAll()
+      const ativos = Array.isArray(response.data) ? response.data : response.data.results
+      setAtivos(ativos)
     } catch (error) {
       console.error('Error loading ativos:', error)
       setError('Erro ao carregar ativos')
     }
-  }, [])
-
-  useEffect(() => {
-    loadAtivos()
-    loadMovimentacoes(1, true)
-  }, [loadAtivos, loadMovimentacoes])
-
-  const handlePageChange = (newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      loadMovimentacoes(newPage)
-    }
   }
 
+  // Load initial data
+  useEffect(() => {
+    loadMovimentacoes(1)
+    loadAtivos()
+  }, [])
+
   const handleFilterChange = () => {
-    loadMovimentacoes(1, true) // Reset to page 1 when filters change
+    setAppliedFilters({
+      year: yearFilter,
+      ticker: tickerFilter
+    })
+    loadMovimentacoes(1, true)
   }
 
   const clearFilters = () => {
     setYearFilter('')
     setTickerFilter('')
-    // loadMovimentacoes will be called by useEffect when state changes
+    setAppliedFilters({
+      year: '',
+      ticker: ''
+    })
+    loadMovimentacoes(1, true)
+  }
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage)
+      loadMovimentacoes(newPage)
+    }
   }
 
   const handleEdit = (movimentacao: Movimentacao) => {
@@ -289,9 +294,6 @@ export default function Movimentacoes() {
       <div className="mt-6 bg-white shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg p-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
           <div>
-            <label htmlFor="year-filter" className="block text-sm font-medium text-gray-700">
-              Ano
-            </label>
             <select
               id="year-filter"
               value={yearFilter}
@@ -299,7 +301,7 @@ export default function Movimentacoes() {
                 const value = e.target.value === '' ? '' : parseInt(e.target.value)
                 setYearFilter(value)
               }}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+              className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800"
             >
               <option value="">Todos os anos</option>
               {getAvailableYears().map(year => (
@@ -311,16 +313,13 @@ export default function Movimentacoes() {
           </div>
 
           <div>
-            <label htmlFor="ticker-filter" className="block text-sm font-medium text-gray-700">
-              Ticker
-            </label>
             <input
               type="text"
               id="ticker-filter"
               value={tickerFilter}
               onChange={(e) => setTickerFilter(e.target.value)}
               placeholder="Digite o ticker..."
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+              className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800 placeholder-gray-500"
             />
           </div>
 
@@ -328,7 +327,7 @@ export default function Movimentacoes() {
             <button
               type="button"
               onClick={handleFilterChange}
-              className="w-full rounded-md bg-primary-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+              className="h-10 w-full rounded-md bg-primary-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
             >
               Filtrar
             </button>
@@ -338,7 +337,7 @@ export default function Movimentacoes() {
             <button
               type="button"
               onClick={clearFilters}
-              className="w-full rounded-md bg-gray-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-gray-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600"
+              className="h-10 w-full rounded-md bg-gray-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-gray-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600"
             >
               Limpar Filtros
             </button>
@@ -348,18 +347,19 @@ export default function Movimentacoes() {
 
       {showForm && (
         <div className="mt-8 bg-white shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg p-6">
+          <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
+            {editingMovimentacao ? 'Editar Movimentação' : 'Adicionar Movimentação'}
+          </h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label htmlFor="ativo" className="block text-sm font-medium text-gray-700">
-                  Ativo
-                </label>
                 <select
                   id="ativo"
                   value={formData.ativo || ''}
                   onChange={(e) => setFormData({ ...formData, ativo: Number(e.target.value) })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                  className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800"
                   required
+                  style={{ maxHeight: 'none' }}
                 >
                   <option value="">Selecione um ativo</option>
                   {ativos && ativos.length > 0 ? (
@@ -375,14 +375,11 @@ export default function Movimentacoes() {
               </div>
 
               <div>
-                <label htmlFor="operacao" className="block text-sm font-medium text-gray-700">
-                  Operação
-                </label>
                 <select
                   id="operacao"
                   value={formData.operacao}
                   onChange={(e) => setFormData({ ...formData, operacao: e.target.value as Operacao })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                  className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800"
                   required
                 >
                   {OPERACAO_OPTIONS.map((option) => (
@@ -394,76 +391,67 @@ export default function Movimentacoes() {
               </div>
 
               <div>
-                <label htmlFor="data" className="block text-sm font-medium text-gray-700">
-                  Data
-                </label>
                 <input
                   type="date"
                   id="data"
                   value={formData.data}
                   onChange={(e) => setFormData({ ...formData, data: e.target.value })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                  className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800"
                   required
                 />
               </div>
 
               <div>
-                <label htmlFor="quantidade" className="block text-sm font-medium text-gray-700">
-                  Quantidade
-                </label>
                 <input
                   type="number"
                   id="quantidade"
                   step="0.000001"
                   value={formData.quantidade || ''}
                   onChange={(e) => setFormData({ ...formData, quantidade: Number(e.target.value) })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                  placeholder="Quantidade"
+                  className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800 placeholder-gray-500"
                   required
                 />
               </div>
 
               <div>
-                <label htmlFor="valorUnitario" className="block text-sm font-medium text-gray-700">
-                  Valor Unitário {formData.ativo && `(${getAtivoCurrency(formData.ativo)})`}
-                </label>
                 <input
                   type="number"
                   id="valorUnitario"
                   step="0.01"
                   value={formData.valorUnitario || ''}
                   onChange={(e) => setFormData({ ...formData, valorUnitario: Number(e.target.value) })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                  placeholder={`Valor Unitário ${formData.ativo ? `(${getAtivoCurrency(formData.ativo)})` : ''}`}
+                  className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800 placeholder-gray-500"
                   required
                 />
               </div>
 
               <div>
-                <label htmlFor="taxa" className="block text-sm font-medium text-gray-700">
-                  Taxa {formData.ativo && `(${getAtivoCurrency(formData.ativo)})`}
-                </label>
                 <input
                   type="number"
                   id="taxa"
                   step="0.01"
                   value={formData.taxa || ''}
                   onChange={(e) => setFormData({ ...formData, taxa: Number(e.target.value) })}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                  placeholder={`Taxa ${formData.ativo ? `(${getAtivoCurrency(formData.ativo)})` : ''}`}
+                  className="h-10 block w-full px-3 rounded-md border-gray-300 bg-white shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm text-gray-800 placeholder-gray-500"
                   required
                 />
               </div>
             </div>
 
-            <div className="flex justify-end space-x-3">
+            <div className="flex justify-end gap-4">
               <button
                 type="button"
                 onClick={() => setShowForm(false)}
-                className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                className="h-10 inline-flex items-center px-4 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="rounded-md bg-primary-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600"
+                className="h-10 inline-flex items-center px-4 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
               >
                 {editingMovimentacao ? 'Salvar' : 'Adicionar'}
               </button>
@@ -476,46 +464,30 @@ export default function Movimentacoes() {
         <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
           <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
             <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
-              <table className="min-w-full divide-y divide-gray-300">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6">
-                      Ativo
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Data
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Operação
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
-                      Quantidade
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
-                      Valor Unitário
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
-                      Taxa
-                    </th>
-                    <th scope="col" className="px-3 py-3.5 text-right text-sm font-semibold text-gray-900">
-                      Custo Total
-                    </th>
-                    <th scope="col" className="relative py-3.5 pl-3 pr-4 sm:pr-6">
-                      <span className="sr-only">Ações</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Ativo</TableCell>
+                    <TableCell>Data</TableCell>
+                    <TableCell>Operação</TableCell>
+                    <TableCell align="right">Quantidade</TableCell>
+                    <TableCell align="right">Valor Unitário</TableCell>
+                    <TableCell align="right">Taxa</TableCell>
+                    <TableCell align="right">Custo Total</TableCell>
+                    <TableCell align="right">Ações</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
                   {Array.isArray(movimentacoes) && movimentacoes.length > 0 ? (
                     movimentacoes.map((movimentacao) => {
                       const ativo = ativos.find(a => a.id === movimentacao.ativo);
                       return (
-                        <tr key={movimentacao.id}>
-                          <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-primary-600 sm:pl-6">
+                        <TableRow key={movimentacao.id}>
+                          <TableCell>
                             <div className="flex items-center">
                               {ativo && (
                                 <img 
-                                  src={ativo.icone_url_display} 
+                                  src={ativo.icone_url || 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png'} 
                                   alt={`${ativo.ticker} icon`}
                                   className="h-6 w-6 rounded-full mr-2 object-cover"
                                   onError={(e) => {
@@ -523,53 +495,40 @@ export default function Movimentacoes() {
                                   }}
                                 />
                               )}
-                              <span>{movimentacao.ativo_display}</span>
+                              <div>
+                                <div style={{ fontWeight: 'bold' }}>{movimentacao.ativo_display}</div>
+                                {ativo && (
+                                  <div style={{ fontSize: '0.8em', color: 'gray' }}>{ativo.moeda}</div>
+                                )}
+                              </div>
                             </div>
-                          </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                          {format(new Date(movimentacao.data), 'dd/MM/yyyy')}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                          {movimentacao.operacao_display}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
-                          {movimentacao.quantidade.toLocaleString('pt-BR', { minimumFractionDigits: 6 })}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
-                          {formatCurrency(movimentacao.valorUnitario, movimentacao.ativo)}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
-                          {formatCurrency(movimentacao.taxa, movimentacao.ativo)}
-                        </td>
-                        <td className="whitespace-nowrap px-3 py-4 text-sm text-right text-gray-500">
-                          {formatCurrency(movimentacao.custoTotal, movimentacao.ativo)}
-                        </td>
-                        <td className="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                          <button
-                            onClick={() => handleEdit(movimentacao)}
-                            className="text-primary-600 hover:text-primary-900 bg-transparent mr-4"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            onClick={() => handleDelete(movimentacao.id)}
-                            className="text-red-600 hover:text-red-900 bg-transparent"
-                          >
-                            Excluir
-                          </button>
-                        </td>
-                      </tr>
+                          </TableCell>
+                          <TableCell>{format(new Date(movimentacao.data), 'dd/MM/yyyy')}</TableCell>
+                          <TableCell>{movimentacao.operacao_display}</TableCell>
+                          <TableCell align="right">{movimentacao.quantidade.toLocaleString('pt-BR', { minimumFractionDigits: 6 })}</TableCell>
+                          <TableCell align="right">{formatCurrency(movimentacao.valorUnitario, ativo?.moeda)}</TableCell>
+                          <TableCell align="right">{formatCurrency(movimentacao.taxa, ativo?.moeda)}</TableCell>
+                          <TableCell align="right">{formatCurrency(movimentacao.custoTotal, ativo?.moeda)}</TableCell>
+                          <TableCell align="right">
+                            <IconButton onClick={() => handleEdit(movimentacao)}>
+                              <EditIcon />
+                            </IconButton>
+                            <IconButton onClick={() => handleDelete(movimentacao.id)}>
+                              <DeleteIcon />
+                            </IconButton>
+                          </TableCell>
+                        </TableRow>
                       );
                     })
                   ) : (
-                    <tr>
-                      <td colSpan={8} className="py-4 text-center text-sm text-gray-500">
+                    <TableRow>
+                      <TableCell colSpan={8} align="center">
                         Nenhuma movimentação encontrada
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           </div>
         </div>

@@ -42,6 +42,7 @@ class AtivoViewSet(viewsets.ModelViewSet):
     search_fields = ['ticker', 'nome']
     ordering_fields = ['ticker', 'nome', 'moeda', 'dataCriacao', 'dataAlteracao']
     ordering = ['ticker']
+    pagination_class = None
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
@@ -107,7 +108,23 @@ class MovimentacaoViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Movimentacao.objects.filter(ativo__usuario=self.request.user)
+        queryset = Movimentacao.objects.filter(ativo__usuario=self.request.user)
+        
+        # Filter by year if provided
+        year = self.request.query_params.get('year')
+        if year:
+            try:
+                year = int(year)
+                queryset = queryset.filter(data__year=year)
+            except ValueError:
+                pass
+        
+        # Filter by ticker if provided
+        ticker = self.request.query_params.get('ticker')
+        if ticker:
+            queryset = queryset.filter(ativo__ticker__icontains=ticker)
+        
+        return queryset
 
     @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def import_excel(self, request):
