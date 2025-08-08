@@ -271,8 +271,8 @@ class EvolucaoPatrimonial(models.Model):
         return f"{self.ativo.ticker} - {self.mes_ano_display}"
 
     def save(self, *args, **kwargs):
-        # Always calculate valor_total based on current price and quantity
-        self.valor_total = self.preco_atual * self.quantidade
+        # Set valor_total from the asset's current value
+        self.valor_total = self.ativo.valor_atual
         super().save(*args, **kwargs)
     
     @property

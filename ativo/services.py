@@ -92,22 +92,41 @@ def create_snapshot(ativo: Ativo) -> Snapshot:
     """Create a snapshot of the current state of an asset"""
     try:
         current_price, is_estimated = ativo.get_current_price()
-        snapshot = Snapshot.objects.create(
+        snapshot, created = Snapshot.objects.update_or_create(
             ativo=ativo,
             data=timezone.now().date(),
-            preco=current_price,
-            quantidade=ativo.quantidade,
-            valor_total=ativo.valor_atual,
-            is_preco_estimado=is_estimated
+            defaults={
+                'preco': current_price,
+                'quantidade': ativo.quantidade,
+                'valor_total': ativo.valor_atual,
+                'is_preco_estimado': is_estimated
+            }
         )
+        # Create an EvolucaoPatrimonial instance with the snapshot data
+        EvolucaoPatrimonial.objects.create(
+            ativo=ativo,
+            data=snapshot.data,
+            preco_atual=snapshot.preco,
+            quantidade=snapshot.quantidade,
+            valor_total=snapshot.valor_total,
+            custo_total=calculate_current_cost(ativo),
+            dividendos_mes=0  # This will be calculated later if needed
+        )
+        logger.info(f"Snapshot created: {snapshot}")
         return snapshot
     except Exception as e:
         logger.error(f"Error creating snapshot for {ativo.ticker}: {str(e)}")
         raise
 
-def create_snapshots_for_all_assets():
-    """Create snapshots for all assets"""
-    for ativo in Ativo.objects.all():
+def create_snapshots_for_all_assets(snapshot_date=None, user=None):
+    """Create snapshots for all assets for a given date and user (optional)."""
+    if snapshot_date is None:
+        snapshot_date = timezone.now().date()
+    if user:
+        ativos = Ativo.objects.filter(usuario=user)
+    else:
+        ativos = Ativo.objects.all()
+    for ativo in ativos:
         try:
             create_snapshot(ativo)
         except Exception as e:
